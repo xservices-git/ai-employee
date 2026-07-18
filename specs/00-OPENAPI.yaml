@@ -1,10 +1,10 @@
 openapi: 3.0.3
 info:
-  title: AI Employee V3.0 API
+  title: AI Employee API
   version: 1.0.0
   description: |
-    REST API cho hệ thống AI Employee local.
-    Cho phép client (Web UI, CLI, mobile) giao tiếp với orchestrator.
+    REST API cho AI Employee local (1 orchestrator).
+    OpenAPI 3.0, moi endpoint co risk level va approval requirement.
   contact:
     name: xservices-git
     url: https://github.com/xservices-git/ai-employee
@@ -19,32 +19,34 @@ servers:
 
 tags:
   - name: tasks
-    description: Task lifecycle (create, get, list, cancel)
+    description: Task lifecycle
   - name: approvals
     description: Approval workflow
   - name: memory
-    description: Memory access (episodic, semantic, procedural)
-  - name: skills
-    description: Skill definitions CRUD
+    description: Memory access
+  - name: rules
+    description: Procedural rules (YAML-backed)
   - name: eval
-    description: Eval harness endpoints
-  - name: admin
-    description: Admin operations
+    description: Eval harness
   - name: health
-    description: Health check + metrics
+    description: Health + metrics
 
 paths:
   /health:
     get:
       tags: [health]
-      summary: Liveness check
+      summary: Liveness
       responses:
         '200':
-          description: Service alive
+          description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Health'
+                type: object
+                properties:
+                  status: {type: string, enum: [ok, degraded, down]}
+                  version: {type: string}
+                  uptime_sec: {type: integer}
 
   /metrics:
     get:
@@ -52,59 +54,45 @@ paths:
       summary: Prometheus metrics
       responses:
         '200':
-          description: Metrics in Prometheus format
+          description: Metrics
           content:
             text/plain:
-              schema:
-                type: string
+              schema: {type: string}
 
   /v1/tasks:
     post:
       tags: [tasks]
-      summary: Tạo task mới
+      summary: Tao task moi
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/TaskCreate'
+              type: object
+              required: [input]
+              properties:
+                input: {type: string, description: Raw user message}
+                domain: {type: string}
+                user_id: {type: string}
+                priority: {type: integer, minimum: 1, maximum: 5, default: 3}
       responses:
         '201':
           description: Task created
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/Task'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '429':
-          $ref: '#/components/responses/RateLimited'
+              schema: {$ref: '#/components/schemas/Task'}
+        '429': {$ref: '#/components/responses/RateLimited'}
     get:
       tags: [tasks]
       summary: List tasks
       parameters:
-        - in: query
-          name: status
-          schema:
-            type: string
-            enum: [pending, running, waiting_approval, completed, failed, cancelled]
-        - in: query
-          name: domain
-          schema:
-            type: string
-        - in: query
-          name: limit
-          schema:
-            type: integer
-            default: 50
-        - in: query
-          name: offset
-          schema:
-            type: integer
-            default: 0
+        - {in: query, name: status, schema: {type: string, enum: [pending, running, waiting_approval, completed, failed]}}
+        - {in: query, name: domain, schema: {type: string}}
+        - {in: query, name: limit, schema: {type: integer, default: 50}}
+        - {in: query, name: offset, schema: {type: integer, default: 0}}
       responses:
         '200':
-          description: List of tasks
+          description: List tasks
           content:
             application/json:
               schema:
@@ -112,56 +100,36 @@ paths:
                 properties:
                   items:
                     type: array
-                    items:
-                      $ref: '#/components/schemas/Task'
-                  total:
-                    type: integer
+                    items: {$ref: '#/components/schemas/Task'}
+                  total: {type: integer}
 
   /v1/tasks/{task_id}:
     get:
       tags: [tasks]
       summary: Get task detail
       parameters:
-        - in: path
-          name: task_id
-          required: true
-          schema:
-            type: string
-            format: uuid
+        - {in: path, name: task_id, required: true, schema: {type: string}}
       responses:
         '200':
-          description: Task detail
+          description: Task
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/Task'
-        '404':
-          $ref: '#/components/responses/NotFound'
+              schema: {$ref: '#/components/schemas/Task'}
     delete:
       tags: [tasks]
       summary: Cancel task
       parameters:
-        - in: path
-          name: task_id
-          required: true
-          schema:
-            type: string
-            format: uuid
+        - {in: path, name: task_id, required: true, schema: {type: string}}
       responses:
         '204':
-          description: Task cancelled
+          description: Cancelled
 
   /v1/tasks/{task_id}/trace:
     get:
       tags: [tasks]
       summary: Get execution trace
       parameters:
-        - in: path
-          name: task_id
-          required: true
-          schema:
-            type: string
-            format: uuid
+        - {in: path, name: task_id, required: true, schema: {type: string}}
       responses:
         '200':
           description: Trace spans
@@ -169,26 +137,25 @@ paths:
             application/json:
               schema:
                 type: array
-                items:
-                  $ref: '#/components/schemas/Span'
+                items: {$ref: '#/components/schemas/Span'}
 
   /v1/tasks/{task_id}/feedback:
     post:
       tags: [tasks]
-      summary: Submit feedback for a task
+      summary: Submit feedback
       parameters:
-        - in: path
-          name: task_id
-          required: true
-          schema:
-            type: string
-            format: uuid
+        - {in: path, name: task_id, required: true, schema: {type: string}}
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Feedback'
+              type: object
+              required: [score]
+              properties:
+                score: {type: integer, minimum: 1, maximum: 5}
+                notes: {type: string}
+                corrections: {type: object}
       responses:
         '201':
           description: Feedback recorded
@@ -198,18 +165,10 @@ paths:
       tags: [approvals]
       summary: List pending approvals
       parameters:
-        - in: query
-          name: approver_id
-          schema:
-            type: string
-        - in: query
-          name: status
-          schema:
-            type: string
-            enum: [pending, approved, rejected, modified]
+        - {in: query, name: status, schema: {type: string, enum: [pending, approved, rejected, modified], default: pending}}
       responses:
         '200':
-          description: List of approval requests
+          description: Approval list
           content:
             application/json:
               schema:
@@ -217,44 +176,48 @@ paths:
                 properties:
                   items:
                     type: array
-                    items:
-                      $ref: '#/components/schemas/ApprovalRequest'
+                    items: {$ref: '#/components/schemas/ApprovalRequest'}
 
   /v1/approvals/{approval_id}/decide:
     post:
       tags: [approvals]
-      summary: Approve, reject, hoặc modify
+      summary: Approve/reject/modify
       parameters:
-        - in: path
-          name: approval_id
-          required: true
-          schema:
-            type: string
-            format: uuid
+        - {in: path, name: approval_id, required: true, schema: {type: string}}
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ApprovalDecision'
+              type: object
+              required: [decision]
+              properties:
+                decision: {type: string, enum: [approved, rejected, modified]}
+                modified_args: {type: object}
+                feedback: {type: string}
       responses:
         '200':
           description: Decision recorded
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/ApprovalRequest'
+              schema: {$ref: '#/components/schemas/ApprovalRequest'}
 
   /v1/memory/search:
     post:
       tags: [memory]
-      summary: Search memory (episodic hoặc semantic)
+      summary: Search memory
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/MemorySearchRequest'
+              type: object
+              required: [query, collection]
+              properties:
+                query: {type: string}
+                collection: {type: string, enum: [episodic, semantic, approval_history]}
+                top_k: {type: integer, default: 5}
+                filters: {type: object}
       responses:
         '200':
           description: Search results
@@ -265,409 +228,171 @@ paths:
                 properties:
                   results:
                     type: array
-                    items:
-                      $ref: '#/components/schemas/MemoryChunk'
+                    items: {$ref: '#/components/schemas/MemoryChunk'}
 
-  /v1/skills:
+  /v1/rules:
     get:
-      tags: [skills]
-      summary: List skill definitions
+      tags: [rules]
+      summary: List procedural rules
       parameters:
-        - in: query
-          name: domain
-          schema:
-            type: string
-        - in: query
-          name: min_success_rate
-          schema:
-            type: number
+        - {in: query, name: domain, schema: {type: string}}
+        - {in: query, name: status, schema: {type: string, enum: [active, shadow, disabled]}}
       responses:
         '200':
-          description: List of skills
+          description: List rules (from YAML + metadata from DB)
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  items:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Skill'
+                type: array
+                items: {$ref: '#/components/schemas/Rule'}
     post:
-      tags: [skills]
-      summary: Tạo skill mới (manual hoặc learned)
+      tags: [rules]
+      summary: Tao rule moi (manual hoac proposed)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RuleCreate'}
+      responses:
+        '201':
+          description: Rule created (status=pending)
+    patch:
+      tags: [rules]
+      summary: Approve/reject/promote rule (HUMAN GATE)
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SkillCreate'
+              type: object
+              required: [rule_id, action]
+              properties:
+                rule_id: {type: string}
+                action: {type: string, enum: [approve, reject, promote, demote]}
+                feedback: {type: string}
       responses:
-        '201':
-          description: Skill created
+        '200':
+          description: Rule updated
 
   /v1/eval/run:
     post:
       tags: [eval]
-      summary: Chạy eval suite
+      summary: Chay eval suite
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/EvalRunRequest'
+              type: object
+              required: [domain]
+              properties:
+                domain: {type: string}
+                ci_mode: {type: boolean, default: false}
+                fail_on_regression: {type: boolean, default: true}
       responses:
         '202':
           description: Eval started
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/EvalRun'
-
-  /v1/eval/runs:
-    get:
-      tags: [eval]
-      summary: List past eval runs
-      responses:
-        '200':
-          description: List of eval runs
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  items:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/EvalRun'
+              schema: {$ref: '#/components/schemas/EvalRun'}
 
 components:
   responses:
-    BadRequest:
-      description: Bad request
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-    NotFound:
-      description: Not found
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
     RateLimited:
       description: Rate limit exceeded
       content:
         application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
+          schema: {$ref: '#/components/schemas/Error'}
 
   schemas:
-    Health:
-      type: object
-      properties:
-        status:
-          type: string
-          enum: [ok, degraded, down]
-        version:
-          type: string
-        uptime_sec:
-          type: integer
-
     Error:
       type: object
       properties:
-        code:
-          type: string
-        message:
-          type: string
-        details:
-          type: object
-
-    TaskCreate:
-      type: object
-      required: [input]
-      properties:
-        input:
-          type: string
-          description: Raw user message
-        domain:
-          type: string
-          description: Optional hint, classifier có thể override
-        user_id:
-          type: string
-        context:
-          type: object
-          description: Optional context (file refs, prior task_id, etc.)
+        code: {type: string}
+        message: {type: string}
 
     Task:
       type: object
       properties:
-        id:
-          type: string
-          format: uuid
-        task_type:
-          type: string
-          enum:
-            - data_processing
-            - content_generation
-            - classification_routing
-            - monitoring_alerting
-            - research_summarization
-            - scheduling_coordination
-            - decision_support
-        domain:
-          type: string
-        status:
-          type: string
-          enum: [pending, running, waiting_approval, completed, failed, cancelled]
-        priority:
-          type: integer
-          minimum: 1
-          maximum: 5
-        input_data:
-          type: object
-        plan:
-          type: object
-        result:
-          type: object
-        confidence:
-          type: number
-          minimum: 0
-          maximum: 1
-        trace_id:
-          type: string
-        created_at:
-          type: string
-          format: date-time
-        completed_at:
-          type: string
-          format: date-time
-        user_id:
-          type: string
-        feedback_id:
-          type: string
+        id: {type: string}
+        task_type: {type: string, enum: [data_processing, content_generation, classification_routing, monitoring_alerting, research_summarization, scheduling_coordination, decision_support]}
+        domain: {type: string}
+        status: {type: string, enum: [pending, running, waiting_approval, completed, failed, cancelled]}
+        priority: {type: integer}
+        input_data: {type: object}
+        plan: {type: object}
+        result: {type: object}
+        confidence: {type: number, minimum: 0, maximum: 1}
+        trace_id: {type: string}
+        created_at: {type: string, format: date-time}
+        completed_at: {type: string, format: date-time}
 
     Span:
       type: object
       properties:
-        trace_id:
-          type: string
-        span_id:
-          type: string
-        parent_span_id:
-          type: string
-        name:
-          type: string
-        start_time:
-          type: string
-          format: date-time
-        end_time:
-          type: string
-          format: date-time
-        duration_ms:
-          type: number
-        attributes:
-          type: object
-        events:
-          type: array
-          items:
-            type: object
-        status:
-          type: string
-          enum: [ok, error]
-
-    Feedback:
-      type: object
-      required: [score]
-      properties:
-        score:
-          type: integer
-          minimum: 1
-          maximum: 5
-        notes:
-          type: string
-        corrections:
-          type: object
-        tags:
-          type: array
-          items:
-            type: string
+        trace_id: {type: string}
+        span_id: {type: string}
+        parent_span_id: {type: string}
+        name: {type: string}
+        start_time: {type: string, format: date-time}
+        end_time: {type: string, format: date-time}
+        duration_ms: {type: number}
+        attributes: {type: object}
+        status: {type: string, enum: [ok, error]}
 
     ApprovalRequest:
       type: object
       properties:
-        id:
-          type: string
-          format: uuid
-        task_id:
-          type: string
-          format: uuid
-        proposal:
-          type: object
-        risk_level:
-          type: string
-          enum: [low, medium, high, critical]
-        reason:
-          type: string
-        precedents:
-          type: array
-          items:
-            type: object
-        decision:
-          type: string
-          enum: [pending, approved, rejected, modified]
-        modified_by:
-          type: string
-        feedback:
-          type: string
-        decided_at:
-          type: string
-          format: date-time
-        created_at:
-          type: string
-          format: date-time
-
-    ApprovalDecision:
-      type: object
-      required: [decision]
-      properties:
-        decision:
-          type: string
-          enum: [approved, rejected, modified]
-        modified_args:
-          type: object
-        feedback:
-          type: string
-        approver_id:
-          type: string
-
-    MemorySearchRequest:
-      type: object
-      required: [query, collection]
-      properties:
-        query:
-          type: string
-        collection:
-          type: string
-          enum: [episodic, semantic, procedural, approval_history]
-        top_k:
-          type: integer
-          default: 5
-        filters:
-          type: object
-          description: Metadata filter
+        id: {type: string}
+        task_id: {type: string}
+        proposal: {type: object}
+        risk_level: {type: string, enum: [low, medium, high, critical]}
+        reason: {type: string}
+        decision: {type: string, enum: [pending, approved, rejected, modified]}
+        decided_at: {type: string, format: date-time}
+        created_at: {type: string, format: date-time}
 
     MemoryChunk:
       type: object
       properties:
-        id:
-          type: string
-        text:
-          type: string
-        metadata:
-          type: object
-        score:
-          type: number
-        collection:
-          type: string
+        id: {type: string}
+        text: {type: string}
+        metadata: {type: object}
+        score: {type: number}
+        collection: {type: string}
 
-    Skill:
+    Rule:
       type: object
       properties:
-        id:
-          type: string
-          format: uuid
-        skill_name:
-          type: string
-        domain:
-          type: string
-        task_types:
-          type: array
-          items:
-            type: string
-        trigger:
-          type: object
-        steps:
-          type: array
-          items:
-            type: object
-        confidence:
-          type: number
-        version:
-          type: integer
-        success_rate:
-          type: number
-        created_from:
-          type: string
-          enum: [manual, learned]
-        updated_at:
-          type: string
-          format: date-time
+        id: {type: string}
+        domain: {type: string}
+        trigger_keywords: {type: array, items: {type: string}}
+        action: {type: string}
+        example: {type: string}
+        success_rate: {type: number}
+        sample_size: {type: integer}
+        status: {type: string, enum: [active, shadow, disabled, pending]}
+        source: {type: string, enum: [manual, learned]}
+        created_at: {type: string, format: date-time}
 
-    SkillCreate:
+    RuleCreate:
       type: object
-      required: [skill_name, domain, task_types, steps]
+      required: [domain, trigger_keywords, action]
       properties:
-        skill_name:
-          type: string
-        domain:
-          type: string
-        task_types:
-          type: array
-          items:
-            type: string
-        trigger:
-          type: object
-        steps:
-          type: array
-          items:
-            type: object
-        confidence:
-          type: number
-          default: 0.7
-
-    EvalRunRequest:
-      type: object
-      required: [domain]
-      properties:
-        domain:
-          type: string
-        model_baseline:
-          type: string
-        model_candidate:
-          type: string
-        ci_mode:
-          type: boolean
-          default: false
-        fail_on_regression:
-          type: boolean
-          default: true
+        domain: {type: string}
+        trigger_keywords: {type: array, items: {type: string}}
+        action: {type: string}
+        example: {type: string}
+        source: {type: string, enum: [manual, learned], default: manual}
 
     EvalRun:
       type: object
       properties:
-        id:
-          type: string
-          format: uuid
-        domain:
-          type: string
-        status:
-          type: string
-          enum: [running, completed, failed]
-        started_at:
-          type: string
-          format: date-time
-        finished_at:
-          type: string
-          format: date-time
-        total_cases:
-          type: integer
-        passed:
-          type: integer
-        failed:
-          type: integer
-        metrics:
-          type: object
-        report_url:
-          type: string
+        id: {type: string}
+        domain: {type: string}
+        status: {type: string, enum: [running, completed, failed]}
+        started_at: {type: string, format: date-time}
+        finished_at: {type: string, format: date-time}
+        total_cases: {type: integer}
+        passed: {type: integer}
+        failed: {type: integer}

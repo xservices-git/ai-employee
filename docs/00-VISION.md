@@ -1,96 +1,88 @@
 # Vision
 
-## Tầm nhìn
+## Muc tieu
 
-Xây dựng một **đội ngũ nhân viên AI local** hoạt động như một tổ chức thật:
+**AI Employee la 1 orchestrator local** giup ban:
+1. **Ghi nho** task da lam, context du an, ky nang da hoc
+2. **Tu sua sai** (loai nho - sai kien thuc, khong phai bug code)
+3. **Tu hoc** tu feedback (propose rules, HUMAN approve)
+4. **Mo rong** cho nhieu domain qua file YAML
 
-- **Tự quyết** các việc có độ tin cậy cao
-- **Xin phê duyệt** khi không chắc chắn
-- **Học liên tục** từ feedback và từ chính những sai lầm của mình
-- **Mở rộng được cho mọi ngành nghề** mà không phải code lại từ đầu
+## Pham vi thuc te (KHONG marketing)
 
-## Vấn đề hiện tại của các hệ AI agent
+### Co the lam (100%)
+- **Memory 3 tang**:
+  - Episodic: SQLite task history (input, output, feedback)
+  - Semantic: ChromaDB embeddings (tim task tuong tu, context)
+  - Procedural: YAML rules (trigger + action + success_rate)
+- **Feedback loop**: user cham 1-5 sao, sua output, comment
+- **Rule extraction** (HUMAN GATE): AI propose rules, ban approve
 
-| Vấn đề | Giải pháp V3.0 |
-|---|---|
-| Agent làm việc rồi quên, không học | Hierarchical memory (episodic + semantic + procedural) |
-| Không phân biệt được việc nào cần hỏi, việc nào tự làm | Confidence scoring đa chiều + ngưỡng an toàn |
-| Black box, không debug được | Trace đầy đủ + eval harness + dashboard |
-| Prompt hack, jailbreak, hallucination | 3 lớp safety (input, plan, output) + sandbox tool execution |
-| Mỗi domain phải code lại | Skill template engine + task taxonomy domain-agnostic |
-| Chỉ chạy được trên cloud | 100% local với Ollama + vector DB local |
+### Co the lam mot phan (40%)
+- **Tu sua sai loai nho** (sai kien thuc, dung sai tool): co the retry voi feedback
+- **Pattern detection**: weekly cron tim rule moi tu 50+ feedback
 
-## Cải tiến sâu so với bản gốc
+### KHONG the lam hoac khong nen
+- ❌ **Tu sua bug code production** - can nguoi fix
+- ❌ **Auto-promote rules** - can human approve (an toan)
+- ❌ **Fine-tuning pipeline** - can GPU A100, khong co tren laptop
+- ❌ **Multi-agent 5 roles** - overkill, 1 orchestrator du
+- ❌ **K8s + DR RTO 30p** - Docker Compose du cho SME
+- ❌ **Helm chart** - khong can
+- ❌ **100% self-improving** - 30% tu dong, 70% co human gate
 
-### 1. Multi-agent collaboration
-Thay vì 1 orchestrator đơn lẻ, dùng **role-based agents** giao tiếp qua **A2A (Agent-to-Agent) protocol**:
+## 7 task types (pham vi M1)
 
-- **Planner** - phân tích yêu cầu, lập kế hoạch
-- **Executor** - gọi tool, thực thi
-- **Critic** - review kết quả, rút kinh nghiệm
-- **Memory Curator** - cập nhật long-term memory
-- **Supervisor** - phê duyệt, override, override chain
+| ID | Ten | Mo ta |
+|---|---|---|
+| data_processing | Xu ly du lieu | Query/insert/update/delete DB |
+| content_generation | Tao noi dung | Viet email, bao cao, bai viet |
+| classification_routing | Phan loai | Phan loai ticket, email, don hang |
+| monitoring_alerting | Giam sat | Check health, alert khi co van de |
+| research_summarization | Nghien cuu | Search web, tom tat tai lieu |
+| scheduling_coordination | Lich | Tao event, reminder, cron |
+| decision_support | Ho tro quyet dinh | Phan tich, goi y, so sanh |
 
-### 2. Hierarchical memory (3 tầng)
-- **Working memory** - context hiện tại của task
-- **Episodic memory** - "task này tôi đã làm ngày X, kết quả Y"
-- **Semantic memory** - "kiến thức chung rút ra từ nhiều episode"
-- **Procedural memory** - "skill thành công cần các bước A, B, C"
+## Do luong thanh cong (KPIs)
 
-### 3. Self-improving loop
-Mỗi task đều sinh ra **learning event**:
-- Khi người dùng sửa → học correction
-- Khi Critic đánh giá → học self-reflection
-- Khi skill thành công nhiều lần → promote lên skill_definitions
-- Khi skill fail nhiều lần → downgrade hoặc xóa
-
-### 4. Observability built-in
-- Mọi task có **trace ID** xuyên suốt
-- Lưu span cho từng bước (plan, retrieve, tool call, evaluate)
-- Dashboard xem lại task bất kỳ, debug tại sao fail
-- Export OpenTelemetry-compatible
-
-### 5. Safety first
-- **3 lớp guardrails**: input filter → plan validator → output filter
-- **Tool sandbox**: mỗi tool khai báo risk level, mức cao buộc approval
-- **Confidence threshold** linh hoạt theo domain
-- **PII detection** tự động mask trước khi ghi memory
-- **Audit log** bất biến (append-only) cho compliance
-
-### 6. Eval harness
-- Golden datasets cho 7 task groups
-- Auto regression test khi update prompt hoặc model
-- So sánh baseline vs candidate model
-- CI integration
-
-### 7. Domain extensibility
-- Mỗi domain (sales, support, HR...) chỉ cần thêm 1 file YAML skill template
-- Không cần đụng core code
-- Validation tự động cho template mới
-
-## Mục tiêu đo lường được
-
-- **Task success rate ≥ 90%** trên golden set
-- **Auto-approval rate ≥ 70%** (chỉ 30% cần hỏi người)
-- **P95 latency < 8s** cho task đơn giản, < 30s cho task phức tạp
+- **Task success rate >= 80%** tren golden set (khong phai 90% - thuc te kho)
+- **Auto-approval rate >= 60%** (40% can hoi nguoi)
+- **P95 latency < 15s** voi 8B model local (khong phai 8s - 8B local cham)
 - **Memory retrieval P95 < 200ms**
-- **Hallucination rate < 2%** (đo bằng Critic + fact-check)
-- **100% local** - không gửi data ra ngoài
+- **Hallucination rate < 5%** (Critic + fact-check)
+- **100% local** - khong gui data ra ngoai
 
-## Không phải mục tiêu
+## KHONG phai muc tieu
 
-- ❌ Thay thế con người hoàn toàn → **Tăng cường năng lực** con người
-- ❌ Làm mọi thứ → **Làm tốt 7 nhóm task** đã định nghĩa
-- ❌ Đa ngôn ngữ real-time → **Hỗ trợ tiếng Việt + Anh tốt**, các ngôn ngữ khác là bonus
-- ❌ Thay thế ERP/CRM → **Tích hợp** với hệ thống có sẵn
+- ❌ Thay the con nguoi 100% → **Tang cuong** nang luc nguoi dung
+- ❌ Lam moi thu → **Lam tot 7 task types** da dinh nghia
+- ❌ Multi-language real-time → **Tieng Viet + Anh** tot, khac la bonus
+- ❌ Thay the ERP/CRM → **Tich hop** voi he thong co san
 
-## Đối tượng sử dụng
+## Doi tuong
 
-1. **Doanh nghiệp SME** muốn tự động hóa mà data phải ở local
-2. **Team operations** đang ngập trong email, ticket, đơn hàng thủ công
-3. **Developer** muốn build AI agent mà không phụ thuộc OpenAI API
-4. **Cá nhân** muốn có "trợ lý ảo" hiểu mình qua feedback
+1. **SME** muon tu dong hoa ma data phai local
+2. **Ops team** dang ngap trong email, ticket, don hang thu cong
+3. **Developer** muon build AI agent khong phu thuoc OpenAI API
+4. **Ca nhan** muon co "tro ly ao" hieu minh qua feedback
 
-## Timeline
+## Timeline thuc te (3 milestone)
 
-Xem `docs/02-ROADMAP.md`.
+| Milestone | Thoi gian | San pham |
+|---|---|---|
+| **M1** | 1-2 thang | Foundation: FastAPI + 1 orchestrator + SQLite + ChromaDB + 3 task types |
+| **M2** | 2-3 thang | Feedback loop: 7 task types, rule propose (HUMAN), 100 eval cases |
+| **M3** | 3-4 thang | Production: multi-user, monitoring, backup, 3 domains production |
+
+**Tong: 6-9 thang**, khong phai 10-12 tuan (spec cu qua ao tuong).
+
+## So voi spec cu (V3.0)
+
+| Kha canh | Spec cu (V3.0) | Spec moi |
+|---|---|---|
+| Agents | 5 (Planner, Executor, Critic, Memory Curator, Supervisor) | 1 orchestrator |
+| Memory | 3 tang + procedural tu promote | 3 tang + HUMAN approve |
+| Learning | Auto self-improving | Propose + human gate |
+| Deploy | K8s + DR + Helm | Docker Compose |
+| Timeline | 6 giai doan 10-12 tuan | 3 milestone 6-9 thang |
+| Code | 95 files push | Skeleton M1 (target) |

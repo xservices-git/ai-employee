@@ -1,242 +1,199 @@
 # Architecture
 
-## 4 tầng + 5 agents
+## 1 orchestrator + 3 tang memory + MCP tools
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│  TẦNG 0: NGƯỜI DÙNG                                              │
-│  Chat / Voice / Email / Dashboard / Approval Center              │
+│  TANG 0: NGUOI DUNG                                              │
+│  Chat / Dashboard / Approval Center                              │
 └────────────────────────────────┬─────────────────────────────────┘
                                  │ REST + WebSocket
 ┌────────────────────────────────▼─────────────────────────────────┐
-│  TẦNG 1: GIAO DIỆN (Next.js - Open WebUI fork)                   │
-│  Chat / Approval Queue / Task Dashboard / Trace Viewer           │
+│  TANG 1: WEB UI (Next.js 15)                                     │
+│  Chat / Task Dashboard / Approval Queue / Trace Viewer           │
 └────────────────────────────────┬─────────────────────────────────┘
                                  │ REST (OpenAPI)
 ┌────────────────────────────────▼─────────────────────────────────┐
-│  TẦNG 2: ĐIỀU PHỐI (PicoClaw - Go + Python)                     │
+│  TANG 2: ORCHESTRATOR (Python 3.12 + FastAPI)                    │
 │                                                                   │
 │  ┌────────────────────────────────────────────────────────────┐ │
-│  │  ORCHESTRATOR (state machine)                               │ │
-│  │  Classifier → Planner → Executor → Critic → Memory Curator │ │
+│  │  STATE MACHINE (1 process, 5 buoc)                          │ │
+│  │  classify -> plan -> execute -> review -> store             │ │
 │  └────────────────────────────────────────────────────────────┘ │
 │                                                                   │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────┐│
-│  │ PLANNER 8B   │ │ EXECUTOR 4B │ │ CRITIC 8B    │ │ SUPERVISOR││
-│  │ • lập kế hoạch│ │ • gọi tool  │ │ • review     │ │ • phê duyệt││
-│  └──────────────┘ └──────┬───────┘ └──────────────┘ └──────────┘│
-│                          │                                        │
-│  ┌───────────────────────▼──────────────────────────────────────┐│
-│  │  TOOL SELECTOR (MCP Registry)                                ││
-│  │  Risk-aware: low → auto, high → approval                    ││
-│  └──────────────────────────────────────────────────────────────┘│
+│  + Confidence Scoring (5 chi so)                                 │
+│  + 3 lop Safety (input/plan/output filter)                       │
+│  + Approval Workflow (high/critical risk)                        │
 └────────────────────────────────┬─────────────────────────────────┘
-                                 │ MCP protocol (JSON-RPC)
+                                 │ MCP JSON-RPC
          ┌───────────────────────┼───────────────────────┐
 ┌────────▼─────────┐  ┌─────────▼──────────┐  ┌────────▼─────────┐
-│ TẦNG 3A: MODEL   │  │ TẦNG 3B: MEMORY    │  │ TẦNG 3C: TOOLS  │
+│ TANG 3A: MODEL   │  │ TANG 3B: MEMORY    │  │ TANG 3C: TOOLS  │
 │ Ollama local     │  │ ChromaDB + SQLite  │  │ MCP servers     │
-│ • 4B: tool call  │  │ • episodic         │  │ • data          │
-│ • 8B: reasoning  │  │ • semantic         │  │ • communication │
-│ • embed: nomic   │  │ • procedural       │  │ • file-ops      │
-│ • rerank: bge    │  │ • approval history │  │ • scheduling    │
-└──────────────────┘  └────────────────────┘  │ • web-research  │
-                                              └──────────────────┘
+│ 4B: classify,    │  │ episodic + semantic│  │ data, comms,    │
+│     plan, exec   │  │ + procedural (YAML)│  │ file, sched,    │
+│ 8B: review       │  │                    │  │ web-research    │
+└──────────────────┘  └────────────────────┘  └──────────────────┘
 ```
 
-## 5 agents (multi-agent cải tiến)
+## State machine (5 buoc, 1 process)
 
-### 1. Classifier
-- **Model:** LLM 4B (Qwen 2.5)
-- **Nhiệm vụ:** Phân loại input → 1 trong 7 task types
-- **Input:** raw user message
-- **Output:** `{task_type, domain, confidence}`
-- **Latency target:** < 500ms
+Thay vi 5 agents rieng (overhead), dung 1 orchestrator voi 5 buoc lien tiep:
 
-### 2. Planner
-- **Model:** LLM 8B (Llama 3.1)
-- **Nhiệm vụ:** Phân tích yêu cầu, lập kế hoạch các bước
-- **Input:** task + memory context
-- **Output:** `{steps: [{action, tool, args, expected_result}]}`
-- **Có thể chia task phụ** nếu quá phức tạp
+```python
+async def run_task(task: Task) -> Task:
+    # Buoc 1: Classify (4B, 500ms)
+    task.task_type = await classify(task.input)
+    task.domain = detect_domain(task.input)
 
-### 3. Executor
-- **Model:** LLM 4B (Qwen 2.5)
-- **Nhiệm vụ:** Gọi MCP tool, xử lý response
-- **Input:** 1 step từ Planner
-- **Output:** tool result
-- **Retry:** 3 lần với backoff 1s/3s/7s
+    # Buoc 2: Plan (8B, 1-2s)
+    plan = await plan(task, memory_context)
+    task.confidence = calculate_confidence(plan)
 
-### 4. Critic
-- **Model:** LLM 8B (Mistral)
-- **Nhiệm vụ:** Review output của Executor
-- **Kiểm tra:**
-  - Có đúng yêu cầu không
-  - Có hallucination không
-  - Có PII leak không
-  - Có vi phạm policy không
-- **Output:** `{approved: bool, score: 0-1, issues: [...]}`
+    # Buoc 3: Approval gate (neu confidence < 0.7 hoac risk >= high)
+    if needs_approval(task):
+        task = await wait_for_approval(task)
 
-### 5. Memory Curator
-- **Model:** LLM 4B
-- **Nhiệm vụ:** Cập nhật long-term memory sau task
-- **Extract:**
-  - Episodic: lưu task + result
-  - Semantic: extract patterns
-  - Procedural: promote skill nếu success cao
-- **Chạy async** sau khi task done
+    # Buoc 4: Execute (4B, 2-10s)
+    result = await execute(plan)
 
-## A2A Protocol (Agent-to-Agent)
+    # Buoc 5: Review (8B, 1-2s)
+    review = await review(result)
+    if review.score < 0.5:
+        result = await retry_with_feedback(result, review.issues)
 
-Agents trao đổi qua message format chuẩn:
+    # Async: Store memory (khong block)
+    asyncio.create_task(store_episode(task, result, review))
 
-```json
-{
-  "trace_id": "uuid",
-  "from": "planner",
-  "to": "executor",
-  "type": "request",
-  "action": "execute_step",
-  "payload": {
-    "step_id": 2,
-    "tool": "query_db",
-    "args": {"sql": "SELECT * FROM orders WHERE id = 123"}
-  },
-  "context": {
-    "task_id": "uuid",
-    "user_id": "uuid",
-    "domain": "sales"
-  },
-  "deadline_ms": 5000
-}
+    return task
 ```
 
-Mọi message đều có `trace_id` để debug xuyên suốt.
+**Ly do 1 orchestrator thay vi 5 agents:**
+- 5 agents = 5 process + message bus + 5x memory load = CHAM va PHUC TAP
+- 1 orchestrator = 1 process, de debug, de test, nhanh hon
+- Neu can scale: spawn nhieu orchestrator cho nhieu task (khong phai 5 agents/instance)
 
-## Hierarchical Memory (3 tầng + 1 layer)
-
-### Working memory
-- Context hiện tại của task
-- Lưu trong RAM, clear khi task xong
-- Schema: `{task_id, plan, current_step, intermediate_results}`
-
-### Episodic memory
-- "Task X tôi đã làm, kết quả Y"
-- ChromaDB collection `episodic`
-- Metadata: `{task_type, domain, date, success, user_id}`
-
-### Semantic memory
-- Kiến thức chung rút ra từ nhiều episode
-- ChromaDB collection `semantic`
-- Ví dụ: "Khách hàng VIP cần respond trong 2h"
-
-### Procedural memory
-- Skill definitions
-- SQLite table `skill_definitions`
-- Promote/demote dựa trên success rate
-
-### Approval history
-- Tất cả approval decisions
-- ChromaDB collection `approval_history`
-- Dùng để predict risk cho task tương lai
-
-## Confidence Scoring
-
-5 chỉ số có trọng số, xem chi tiết `specs/02-CONFIDENCE-SCORING.md`.
+## Confidence scoring (5 chi so)
 
 ```
-confidence = familiarity × 0.30
-           + clarity × 0.20
-           + risk × 0.25
-           + similarity × 0.15
-           + complexity × 0.10
+confidence = familiarity x 0.30
+           + clarity      x 0.20
+           + risk_score   x 0.25
+           + similarity   x 0.15
+           + simplicity   x 0.10
 ```
 
-- ≥ 0.70: auto-execute
-- 0.40-0.69: request approval
-- < 0.40: reject hoặc clarify
+Chi tiet xem `specs/02-CONFIDENCE.md`.
 
-## Safety (3 lớp)
+## Safety (3 lop)
 
 ### Layer 1: Input filter
-- Detect prompt injection
-- Strip PII nếu là test
-- Reject nếu rate limit vượt
+- Prompt injection detection (regex + heuristic)
+- PII detection + mask
+- Rate limit (100 req/h/user)
 
 ### Layer 2: Plan validator
-- Kiểm tra plan có vi phạm policy không
-- Kiểm tra tool call có hợp lệ không
-- Kiểm tra risk level có khớp với confidence không
+- Action whitelist
+- Risk-class matching (tool risk vs confidence)
+- Resource limit (token, time, cost)
 
 ### Layer 3: Output filter
-- Detect PII leak
-- Fact-check (nếu có thể)
-- Kiểm tra có chứa "injection attempt" không
+- PII leak detection
+- Hallucination scoring (Critic)
+- Format validation
+
+Chi tiet xem `specs/03-SAFETY.md`.
+
+## Memory 3 tang
+
+### Tang 1: Episodic (SQLite)
+- Moi task = 1 row trong `tasks` table
+- Metadata: task_type, domain, user_id, confidence, success
+- Query: filter theo user, task_type, success rate
+
+### Tang 2: Semantic (ChromaDB)
+- Embedding cua input + output + feedback
+- Collection: `episodic_memory`, `semantic_memory`
+- Query: cosine similarity, top-k
+
+### Tang 3: Procedural (YAML)
+- File `domain_configs/{domain}/rules.yaml`
+- Moi rule: trigger_keywords, action, example, success_rate, sample_size
+- HUMAN tao + HUMAN approve rule moi (KHONG auto-promote)
+
+## Learning loop (HUMAN GATE)
+
+```
+Task chay -> Outcome (success/fail)
+    |
+    v
+Feedback thu thap (auto implicit + user explicit)
+    |
+    v
+Weekly cron: pattern detection
+    |
+    v
+AI propose rules moi (status=PENDING)
+    |
+    v
+HUMAN review qua UI
+    |
+    v
+HUMAN approve -> rule active
+    |
+    v
+Shadow mode 1 tuan
+    |
+    v
+HUMAN promote len main
+```
+
+**Quan trong:** AI KHONG BAO GIO tu promote rule production. Moi rule can:
+- 1 PR voi description + example
+- Human test tren 5 cases
+- Human approve
+
+**Toc do thuc te:** 5-10 rules moi / thang (khong phai tu dong hoan toan).
 
 ## Observability
 
-### Trace format (OpenTelemetry-compatible)
-```
-trace_id: abc-123
-├─ span: classify (50ms)
-├─ span: plan (1200ms)
-│  └─ span: retrieve_memory (180ms)
-│     └─ span: vector_search (45ms)
-│     └─ span: rerank (95ms)
-├─ span: execute_step_1 (210ms)
-├─ span: execute_step_2 (340ms)
-├─ span: critic (450ms)
-└─ span: memory_update (200ms)
-```
+### Trace (OpenTelemetry-compatible)
+- Moi task co `trace_id`
+- Span cho moi buoc: classify, plan, execute, review, store
+- Luu vao `traces` table, dashboard xem lai
 
 ### Metrics (Prometheus)
-- `tasks_total{task_type, domain, status}` counter
+- `tasks_total{task_type, status}` counter
 - `task_duration_seconds` histogram
 - `confidence_score` histogram
 - `approval_required_total` counter
-- `tool_call_total{tool, status}` counter
-- `memory_retrieval_duration_seconds` histogram
 
-### Logs (structured JSON)
-```json
-{
-  "ts": "2026-07-19T02:30:00Z",
-  "level": "info",
-  "trace_id": "abc-123",
-  "task_id": "xyz-789",
-  "agent": "executor",
-  "event": "tool_call",
-  "tool": "query_db",
-  "duration_ms": 210,
-  "result": "success"
-}
-```
+Chi tiet xem `specs/04-OBSERVABILITY.md`.
 
-## Công nghệ
+## Tech stack (toi gian)
 
-| Layer | Tech | Lý do |
-|---|---|---|
-| API gateway | FastAPI (Python 3.12) | Async, type-safe, OpenAPI tự sinh |
-| Orchestrator | Python (chính) + Go (critical path) | Ecosystem AI tốt + perf cho state machine |
-| LLM serving | Ollama | Local, OpenAI-compatible API |
-| Vector DB | ChromaDB | Local, persistent, đơn giản |
-| RDB | SQLite | Embedded, không cần server |
-| Web | Next.js 15 + TypeScript | SSR, fast refresh, ecosystem |
-| MCP servers | Python + JSON-RPC | Đơn giản, dễ extend |
-| Tracing | OpenTelemetry SDK | Industry standard |
-| Metrics | Prometheus client | De facto |
-| Container | Docker + Compose | Dev đơn giản |
-| Deploy | Docker Swarm hoặc K3s | Single-node đủ cho SME |
+### Backend
+- **Python 3.12** + FastAPI + uvicorn
+- **SQLite** (1M records du, backup don gian)
+- **ChromaDB** (local, persistent, khong can server)
+- **Ollama** (4B + 8B + nomic-embed)
+- **httpx** (async HTTP)
+- **structlog** (JSON log)
+- **pytest** + ruff + mypy
 
-## Cải tiến sâu so với bản gốc
+### Frontend
+- **Next.js 15** + TypeScript + Tailwind 4
+- **shadcn/ui** + zustand + tanstack-query
 
-| Khía cạnh | Bản gốc | V3.0 |
-|---|---|---|
-| Orchestration | 1 loop tuần tự | 5 agents song song, A2A protocol |
-| Memory | 2 tầng | 3 tầng + 1 layer (procedural + approval) |
-| Learning | Không | Self-improving với Memory Curator |
-| Tracing | Không | OpenTelemetry + dashboard |
-| Safety | 1 threshold | 3 lớp + sandbox + audit |
-| Domain mở rộng | Sửa code | 1 file YAML |
-| Tool integration | Hardcode | MCP standard, registry pattern |
-| Failure recovery | Không | Retry + fallback + circuit breaker |
+### Container
+- **Docker Compose** (KHONG K8s, KHONG Helm)
+- Volumes: `./data:/data` (SQLite + ChromaDB + Ollama)
+
+### KHONG dung
+- LangChain (black box, version hell)
+- LlamaIndex (tuong tu)
+- Pinecone, Weaviate (ChromaDB du)
+- Redis (chua can)
+- Kubernetes (qua nang cho SME)
+- MongoDB (SQLite du)
+- OpenAI API (vendor lock-in)
