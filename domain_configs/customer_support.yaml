@@ -1,0 +1,17 @@
+confidence:
+  auto_execute_threshold: 0.65
+  approval_threshold: 0.40
+  weights:
+    familiarity: 0.35
+    clarity: 0.20
+    risk: 0.20
+    similarity: 0.15
+    simplicity: 0.10
+
+risk_overrides:
+  refund: 0.85
+  account_closure: 0.95
+
+prompt_templates:
+  greeting: "Chào anh/chị, em là trợ lý AI. Em có thể giúp gì ạ?"
+  apologize: "Em xin lỗi về sự bất tiện này ạ."

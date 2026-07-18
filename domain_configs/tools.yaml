@@ -1,0 +1,129 @@
+tools:
+  # data-processing
+  - name: query_db
+    server: data-processing
+    risk: low
+    timeout_sec: 10
+    rate_limit:
+      per_user: 1000
+      per_tool: 10000
+    requires_approval: false
+    description: "Read-only SQL query"
+
+  - name: insert_record
+    server: data-processing
+    risk: medium
+    timeout_sec: 10
+    rate_limit:
+      per_user: 500
+      per_tool: 5000
+    requires_approval: false
+    description: "Insert single record"
+
+  - name: update_record
+    server: data-processing
+    risk: high
+    timeout_sec: 10
+    rate_limit:
+      per_user: 200
+      per_tool: 2000
+    requires_approval: true
+    description: "Update record by ID"
+    approval_reason: "Modifying existing data - verify ID and new values"
+
+  - name: delete_record
+    server: data-processing
+    risk: critical
+    timeout_sec: 10
+    rate_limit:
+      per_user: 50
+      per_tool: 500
+    requires_approval: true
+    description: "Delete record by ID"
+    approval_reason: "Destructive action - requires explicit approval"
+
+  # communication
+  - name: send_email
+    server: communication
+    risk: high
+    timeout_sec: 30
+    rate_limit:
+      per_user: 100
+      per_tool: 1000
+    requires_approval: true
+    description: "Send email via SMTP"
+    approval_reason: "External communication - verify recipient and content"
+
+  - name: create_draft
+    server: communication
+    risk: medium
+    timeout_sec: 10
+    rate_limit:
+      per_user: 500
+      per_tool: 5000
+    requires_approval: false
+    description: "Create email draft"
+
+  # file-operations
+  - name: read_file
+    server: file-ops
+    risk: low
+    timeout_sec: 10
+    rate_limit:
+      per_user: 1000
+      per_tool: 10000
+    requires_approval: false
+    description: "Read file from workspace"
+
+  - name: write_file
+    server: file-ops
+    risk: medium
+    timeout_sec: 10
+    rate_limit:
+      per_user: 500
+      per_tool: 5000
+    requires_approval: false
+    description: "Write file in workspace"
+
+  - name: delete_file
+    server: file-ops
+    risk: high
+    timeout_sec: 10
+    rate_limit:
+      per_user: 50
+      per_tool: 500
+    requires_approval: true
+    description: "Delete file"
+    approval_reason: "Destructive action"
+
+  # scheduling
+  - name: create_event
+    server: scheduling
+    risk: medium
+    timeout_sec: 10
+    rate_limit:
+      per_user: 200
+      per_tool: 2000
+    requires_approval: false
+    description: "Create calendar event"
+
+  # web-research
+  - name: web_search
+    server: web-research
+    risk: low
+    timeout_sec: 30
+    rate_limit:
+      per_user: 500
+      per_tool: 5000
+    requires_approval: false
+    description: "Search the web"
+
+  - name: fetch_url
+    server: web-research
+    risk: low
+    timeout_sec: 30
+    rate_limit:
+      per_user: 500
+      per_tool: 5000
+    requires_approval: false
+    description: "Fetch URL content"

@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+ENV/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.tox/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Data
+data/
+*.db
+*.sqlite
+*.sqlite3
+chroma/
+.ollama/
+logs/
+*.log
+
+# Secrets
+.env
+.env.local
+*.key
+*.pem
+secrets/
+
+# Backup
+*.bak
+*.tmp
+_tmp_/
+_test_/
+
+# OS
+Thumbs.db
+desktop.ini

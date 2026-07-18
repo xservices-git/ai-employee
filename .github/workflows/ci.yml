@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main, dev]
+  pull_request:
+    branches: [master, main, dev]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff mypy
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: mypy core/ api/ eval/
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install uv
+        run: pip install uv
+      - name: Install deps
+        run: uv sync --all-extras
+      - name: Run tests
+        run: uv run pytest tests/unit -v --tb=short
+      - name: Coverage
+        run: uv run pytest --cov=core --cov=api --cov-report=xml
+      - uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker images
+        run: |
+          docker build -f infra/docker/api.Dockerfile -t ai-employee-api:test .
+      - name: Smoke test
+        run: |
+          docker run -d --name test-api -p 8000:8000 ai-employee-api:test
+          sleep 10
+          curl -f http://localhost:8000/health || exit 1
+          docker stop test-api

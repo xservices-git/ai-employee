@@ -1,0 +1,42 @@
+domain: customer_support
+version: 1.0
+description: "Customer support tickets handling - Vietnamese context"
+
+cases:
+  - id: cs_001
+    input: "Khách hàng phàn nàn đơn hàng #123 giao trễ 3 ngày"
+    expected:
+      task_type: data_processing
+      should_contain: ["đơn hàng #123"]
+    risk_level: medium
+    timeout_sec: 30
+
+  - id: cs_002
+    input: "Tôi muốn refund đơn hàng #456 vì nhận sai sản phẩm"
+    expected:
+      task_type: data_processing
+      should_contain: ["refund", "đơn hàng #456"]
+    risk_level: high
+    timeout_sec: 30
+
+  - id: cs_003
+    input: "Viết email xin lỗi khách hàng về sự cố giao hàng hôm qua"
+    expected:
+      task_type: content_generation
+      should_contain: ["xin lỗi"]
+    risk_level: low
+    timeout_sec: 30
+
+  - id: cs_004
+    input: "Phân loại 50 ticket support theo mức độ urgent"
+    expected:
+      task_type: classification_routing
+    risk_level: low
+    timeout_sec: 60
+
+  - id: cs_005
+    input: "Cảnh báo khi có đơn hàng pending quá 24 giờ"
+    expected:
+      task_type: monitoring_alerting
+    risk_level: low
+    timeout_sec: 30

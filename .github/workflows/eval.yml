@@ -1,0 +1,56 @@
+name: Eval
+
+on:
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  eval:
+    runs-on: [self-hosted, gpu]  # Requires GPU runner with Ollama
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        run: |
+          pip install uv
+          uv sync --all-extras
+      - name: Install Ollama
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+          ollama serve &
+          sleep 5
+          ollama pull qwen2.5:4b
+          ollama pull llama3.1:8b
+      - name: Run eval
+        run: uv run python -m eval.runner --ci
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: eval/reports/
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const dir = 'eval/reports';
+            const files = fs.readdirSync(dir).filter(f => f.endsWith('.json')).sort();
+            const latest = files[files.length - 1];
+            const report = JSON.parse(fs.readFileSync(path.join(dir, latest), 'utf8'));
+            let body = '## Eval Report\n\n';
+            body += '| Domain | Total | Passed | Failed | Rate |\n';
+            body += '|---|---|---|---|---|\n';
+            for (const r of report) {
+              const rate = r.total > 0 ? (r.passed / r.total * 100).toFixed(1) + '%' : 'N/A';
+              body += `| ${r.domain} | ${r.total} | ${r.passed} | ${r.failed} | ${rate} |\n`;
+            }
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });

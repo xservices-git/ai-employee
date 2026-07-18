@@ -1,0 +1,27 @@
+domain: hr_admin
+version: 1.0
+description: "HR & admin tasks - leave, payroll, onboarding"
+
+cases:
+  - id: hr_001
+    input: "Duyệt đơn xin nghỉ phép của nhân viên #E123 từ ngày 20/7 đến 25/7"
+    expected:
+      task_type: data_processing
+      should_contain: ["nghỉ phép"]
+    risk_level: medium
+    timeout_sec: 30
+
+  - id: hr_002
+    input: "Tạo bảng lương tháng 7 cho phòng marketing"
+    expected:
+      task_type: data_processing
+    risk_level: high
+    timeout_sec: 60
+
+  - id: hr_003
+    input: "Soạn email onboarding cho nhân viên mới Nguyễn Văn B"
+    expected:
+      task_type: content_generation
+      should_contain: ["onboarding", "chào mừng"]
+    risk_level: medium
+    timeout_sec: 30

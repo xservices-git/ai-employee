@@ -1,0 +1,13 @@
+confidence:
+  auto_execute_threshold: 0.70
+  approval_threshold: 0.45
+  weights:
+    familiarity: 0.30
+    clarity: 0.20
+    risk: 0.30
+    similarity: 0.10
+    simplicity: 0.10
+
+risk_overrides:
+  bulk_discount: 0.60
+  refund_approval: 0.75

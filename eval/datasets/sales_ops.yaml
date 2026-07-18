@@ -1,0 +1,34 @@
+domain: sales_ops
+version: 1.0
+description: "Sales operations - quote, order, customer management"
+
+cases:
+  - id: so_001
+    input: "Tìm đơn hàng của khách VIP Nguyễn Văn A trong tháng 7"
+    expected:
+      task_type: data_processing
+      should_contain: ["Nguyễn Văn A"]
+    risk_level: medium
+    timeout_sec: 30
+
+  - id: so_002
+    input: "Tạo báo cáo doanh thu quý 3 theo khu vực"
+    expected:
+      task_type: data_processing
+    risk_level: low
+    timeout_sec: 60
+
+  - id: so_003
+    input: "Soạn email báo giá cho khách hàng tiềm năng về gói enterprise"
+    expected:
+      task_type: content_generation
+      should_contain: ["báo giá", "enterprise"]
+    risk_level: medium
+    timeout_sec: 30
+
+  - id: so_004
+    input: "Phân tích rủi ro deal X với khách hàng mới"
+    expected:
+      task_type: decision_support
+    risk_level: low
+    timeout_sec: 30
