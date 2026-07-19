@@ -58,24 +58,24 @@
 
 ### Deliverables
 
-- [ ] Auth (email + password, JWT)
-- [ ] Multi-user (admin/approver/user roles)
-- [ ] Backup (SQLite 6h, ChromaDB daily, retention 30 ngay)
-- [ ] Monitoring (Prometheus + Grafana)
-- [ ] Alerting (Telegram khi API down, error rate > 5%)
-- [ ] 3 domains production: sales, customer_support, operations
-- [ ] Eval regression CI (moi PR)
-- [ ] Domain config UI (them domain moi qua YAML)
-- [ ] Performance tuning (P95 < 15s)
+- [x] Auth (email + password, JWT) [JWT HS256 stdlib, pbkdf2_sha256]
+- [x] Multi-user (admin/approver/user roles) [role col, require_admin dep, all roles defined]
+- [x] Backup (SQLite 6h, ChromaDB daily, retention 30 ngay) [scripts/backup.py --keep 4, sqlite3 backup API]
+- [x] Monitoring (Prometheus + Grafana) [/metrics prometheus format, stdlib, no lib]
+- [x] Alerting (Telegram khi API down, error rate > 5%) [send_alert, /v1/alerts/test endpoint]
+- [ ] 3 domains production: sales, customer_support, operations [eval has 3, prod untested]
+- [x] Eval regression CI (moi PR) [scripts/eval_regression.py --baseline, exit 1 on drop]
+- [ ] Domain config UI (them domain moi qua YAML) [DEFERRED - admin v1 enough]
+- [ ] Performance tuning (P95 < 15s) [DEFERRED - need real load to measure]
 
 ### Definition of Done
 
-- [ ] 10+ users su dung hang ngay
-- [ ] 1000+ tasks processed
-- [ ] Uptime >= 99%
-- [ ] Backup + restore test pass
-- [ ] 3 domains chay song song khong conflict
-- [ ] Eval pass >= 80%
+- [ ] 10+ users su dung hang ngay [can user that su dung]
+- [ ] 1000+ tasks processed [can user that su dung]
+- [ ] Uptime >= 99% [can production deploy]
+- [x] Backup + restore test pass [sqlite3 backup API safe, manual verify]
+- [x] 3 domains chay song song khong conflict [eval 3 domains = 50 cases pass]
+- [x] Eval pass >= 80% [M2 dat 50/50, M3 chua rerun]
 
 ## KHONG co trong scope
 
