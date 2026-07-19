@@ -131,6 +131,23 @@ CREATE TABLE IF NOT EXISTS proposed_rules (
 );
 CREATE INDEX IF NOT EXISTS idx_rules_status ON proposed_rules(status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_rules_domain ON proposed_rules(domain, status);
+
+CREATE TABLE IF NOT EXISTS audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    trace_id TEXT,
+    actor TEXT NOT NULL,
+    action TEXT NOT NULL,
+    result TEXT,
+    confidence REAL,
+    metadata TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_log(actor, ts DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log(action, ts DESC);
+CREATE TRIGGER IF NOT EXISTS audit_no_update BEFORE UPDATE ON audit_log
+BEGIN SELECT RAISE(ABORT, 'audit_log is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS audit_no_delete BEFORE DELETE ON audit_log
+BEGIN SELECT RAISE(ABORT, 'audit_log is append-only'); END;
 """
 
 
@@ -702,4 +719,46 @@ def list_learning_events(
             "status": r["status"],
             "created_at": r["created_at"],
         })
+    return out
+
+
+# ============ Audit log ============
+
+def log_action(actor: str, action: str, result: str = "ok", trace_id: Optional[str] = None,
+               confidence: Optional[float] = None, metadata: Optional[dict] = None) -> int:
+    """Append-only audit log entry. Returns row id."""
+    db = get_db()
+    cur = db.execute(
+        "INSERT INTO audit_log (trace_id, actor, action, result, confidence, metadata) VALUES (?, ?, ?, ?, ?, ?)",
+        (trace_id, actor, action, result, confidence,
+         json.dumps(metadata, ensure_ascii=False) if metadata else None),
+    )
+    db.commit()
+    return cur.lastrowid
+
+def list_audit_log(actor: Optional[str] = None, action: Optional[str] = None,
+                   limit: int = 100) -> list[dict]:
+    """Get audit log entries, newest first."""
+    db = get_db()
+    where, vals = [], []
+    if actor:
+        where.append("actor = ?")
+        vals.append(actor)
+    if action:
+        where.append("action = ?")
+        vals.append(action)
+    where_sql = ("WHERE " + " AND ".join(where)) if where else ""
+    rows = db.execute(
+        f"SELECT * FROM audit_log {where_sql} ORDER BY ts DESC LIMIT ?",
+        (*vals, limit),
+    ).fetchall()
+    out = []
+    for r in rows:
+        row = dict(r)
+        if row.get("metadata"):
+            try:
+                row["metadata"] = json.loads(row["metadata"])
+            except (json.JSONDecodeError, TypeError):
+                pass
+        out.append(row)
     return out

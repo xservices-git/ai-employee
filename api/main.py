@@ -109,6 +109,9 @@ def create_task(req: TaskCreate, bg: BackgroundTasks):
         domain=req.domain,
         priority=req.priority,
     )
+    db.log_action(req.user_id, "create_task", result="ok",
+                  trace_id=task.get("trace_id"),
+                  metadata={"task_id": task["id"], "domain": req.domain})
     if req.auto_run:
         # Dung thread rieng de khong block FastAPI response.
         import threading
@@ -156,6 +159,9 @@ def submit_feedback(task_id: str, req: FeedbackCreate):
     if not task:
         raise HTTPException(404, f"Task not found: {task_id}")
     fb = db.create_feedback(task_id, req.score, req.notes, req.corrections)
+    db.log_action(task["user_id"], "submit_feedback", result="ok",
+                  trace_id=task.get("trace_id"),
+                  metadata={"task_id": task_id, "score": req.score})
     return JSONResponse(fb, status_code=201)
 
 
@@ -200,6 +206,9 @@ def decide_approval(approval_id: str, req: ApprovalDecision):
     if ap["decision"] != "pending":
         raise HTTPException(400, f"Approval already decided: {ap['decision']}")
     updated = db.decide_approval(approval_id, req.decision, req.feedback)
+    db.log_action("local", f"approval_{req.decision}", result="ok",
+                  trace_id=ap.get("trace_id"),
+                  metadata={"approval_id": approval_id, "task_id": ap["task_id"], "risk_level": ap.get("risk_level")})
     if req.decision in ("approved", "modified"):
         import threading
         threading.Thread(
@@ -259,6 +268,8 @@ def decide_rule(rule_id: str, req: RuleDecision):
     if r["status"] != "pending":
         raise HTTPException(400, f"Rule already decided: {r['status']}")
     updated = db.decide_proposed_rule(rule_id, req.decision, review_notes=req.review_notes)
+    db.log_action("local", f"rule_{req.decision}", result="ok",
+                  metadata={"rule_id": rule_id, "domain": r.get("domain")})
     return updated
 
 class RuleOutcome(BaseModel):
