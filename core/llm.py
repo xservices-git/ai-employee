@@ -67,22 +67,51 @@ def _classify_heuristic(text: str) -> dict:
     """Rule-based fallback khi Ollama khong co."""
     t = text.lower()
     # Order matters: more specific first
-    if any(k in t for k in ["alert", "canh bao", "status", "health check", "kiem tra trang thai"]):
-        return {"task_type": "monitoring_alerting", "domain": None}
-    if any(k in t for k in ["dat lich", "reminder", "hen", "calendar", "event", "tao cuoc hop"]):
+
+    # Scheduling - phai co keyword cu the
+    if any(k in t for k in ["dat lich ", "reminder", "hen gap", "tao cuoc hop", "calendar event"]):
         return {"task_type": "scheduling_coordination", "domain": None}
-    if any(k in t for k in ["phan tich", "so sanh", "goi y", "quyet dinh", "nen chon", "lua chon"]):
+
+    # Decision support
+    if any(k in t for k in [" nen chon", "lua chon giua", "goi y quyet dinh", "phuong an tot nhat"]):
         return {"task_type": "decision_support", "domain": None}
-    if any(k in t for k in ["tom tat", "search", "tim kiem", "nghien cuu", "research", "summary", "wiki"]):
-        return {"task_type": "research_summarization", "domain": None}
-    if any(k in t for k in ["viet email", "viet bao cao", "viet bai", "draft email", "content", "soan thao"]):
-        return {"task_type": "content_generation", "domain": None}
-    if any(k in t for k in ["phan loai", "classify", "route", "phan nhom ticket"]):
+
+    # Classification
+    if any(k in t for k in ["phan loai ticket", "route email", "phan nhom"]):
         return {"task_type": "classification_routing", "domain": None}
-    if any(k in t for k in ["don hang", "khach hang", "ticket", "ho tro", "sales", "invoice", "order",
-                            "kiem tra don", "check don", "lookup", "truy van"]):
-        domain = "customer_support" if any(x in t for x in ["support", "khach", "ticket", "ho tro"]) else "sales_ops"
+
+    # Monitoring - chi khi khong co keyword data processing
+    has_data_kw = any(k in t for k in [
+        "don hang", "khach hang", "invoice", "order", "ticket", "ho tro",
+        "lookup", "truy van", "query", "lay thong tin", "doanh thu",
+        "products", "bang ", "shop ", "sku", "id ", "so dien thoai",
+    ])
+    if not has_data_kw and any(k in t for k in ["alert", "canh bao", "trang thai he thong", "health check"]):
+        return {"task_type": "monitoring_alerting", "domain": None}
+
+    # Research - phai co keyword cu the
+    if any(k in t for k in ["tom tat", "search", "nghien cuu", "research",
+                            "summary", "wiki", "docs", "tai lieu", "pdf", "bai bao",
+                            "ve ", "thong tin ve"]):
+        # Nhung phai la research, khong phai data processing
+        if "truy van" not in t and "query" not in t and "lay " not in t and "xem " not in t:
+            return {"task_type": "research_summarization", "domain": None}
+
+    # Content - phai co keyword viet/soan/draft/template/content/noi dung
+    if any(k in t for k in ["viet ", "soan ", "draft ", "content", "template",
+                            "thong bao", "email", "tin nhan", "bai viet",
+                            "newsletter", "bao cao", "trang chu", "mo ta"]):
+        return {"task_type": "content_generation", "domain": None}
+
+    # Data processing - mac dinh cho cac lookup/query/get/check
+    if has_data_kw:
+        domain = "customer_support" if any(x in t for x in [
+            "support", "khach", "ticket", "ho tro"
+        ]) else "sales_ops" if any(x in t for x in [
+            "doanh thu", "sales", "invoice", "order", "shop "
+        ]) else None
         return {"task_type": "data_processing", "domain": domain}
+
     return {"task_type": "data_processing", "domain": None}
 
 

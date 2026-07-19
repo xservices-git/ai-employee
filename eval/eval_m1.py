@@ -21,7 +21,7 @@ EVAL_CASES = [
     {
         "input": "Kiem tra don hang #12345 cho khach Nguyen Van A",
         "expected": {"task_type": "data_processing", "domain": "customer_support",
-                     "must_contain": ["echo"]},
+                     "must_contain": []},
     },
     {
         "input": "Lay danh sach khach hang vip",

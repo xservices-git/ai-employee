@@ -10,18 +10,13 @@ services:
       - "8000:8000"
     environment:
       - APP_ENV=production
-      - DATABASE_URL=sqlite:////data/ai-employee.db
-      - CHROMA_PATH=/data/chroma
-      - OLLAMA_URL=http://ollama:11434
-      - LOG_LEVEL=INFO
+      - DATA_DIR=/data
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
     volumes:
       - data:/data
-    depends_on:
-      ollama:
-        condition: service_started
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -40,60 +35,5 @@ services:
       - api
     restart: unless-stopped
 
-  ollama:
-    image: ollama/ollama:latest
-    container_name: ai-employee-ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama:/root/.ollama
-    # Uncomment for GPU support
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
-    restart: unless-stopped
-
-  mcp-data-processing:
-    build:
-      context: ..
-      dockerfile: infra/docker/mcp.Dockerfile
-    container_name: ai-employee-mcp-data
-    command: ["python", "-m", "mcp_servers.data_processing.server"]
-    environment:
-      - DATABASE_URL=sqlite:////data/ai-employee.db
-    volumes:
-      - data:/data
-    restart: unless-stopped
-
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: ai-employee-prometheus
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-    restart: unless-stopped
-
-  grafana:
-    image: grafana/grafana:latest
-    container_name: ai-employee-grafana
-    ports:
-      - "3001:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-    volumes:
-      - grafana:/var/lib/grafana
-    depends_on:
-      - prometheus
-    restart: unless-stopped
-
 volumes:
   data:
-  ollama:
-  grafana:

@@ -1,104 +1,123 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
+import { Send, Bot, User } from "lucide-react";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
-interface Task {
-  id: string;
-  status: string;
-  task_type?: string;
-  domain?: string;
-  confidence?: { final?: number; familiarity?: number; clarity?: number; risk?: number; similarity?: number; simplicity?: number };
-  result?: Record<string, unknown>;
-  error_message?: string;
-}
+type Msg = { role: "user" | "assistant"; text: string; taskId?: string; status?: string };
 
-export default function Home() {
+export default function ChatPage() {
   const [input, setInput] = useState("");
-  const [task, setTask] = useState<Task | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [messages, setMessages] = useState<Msg[]>([]);
+  const [busy, setBusy] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  const submit = async () => {
-    if (!input.trim()) return;
-    setLoading(true);
-    setTask(null);
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages]);
+
+  async function send() {
+    if (!input.trim() || busy) return;
+    const text = input.trim();
+    setInput("");
+    setMessages((m) => [...m, { role: "user", text }]);
+    setBusy(true);
     try {
-      const r = await fetch(`${API_URL}/v1/tasks`, {
+      const r = await fetch(`${API}/v1/tasks`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ input, user_id: "demo_user" }),
+        body: JSON.stringify({ input: text, auto_run: true }),
       });
-      const data = await r.json();
-      setTask(data);
+      const task = await r.json();
+      setMessages((m) => [
+        ...m,
+        { role: "assistant", text: `Tao task #${task.id.slice(0, 8)} (${task.status})`, taskId: task.id, status: task.status },
+      ]);
+      // Poll status
+      let attempts = 0;
+      const poll = setInterval(async () => {
+        attempts++;
+        try {
+          const r2 = await fetch(`${API}/v1/tasks/${task.id}`);
+          const t = await r2.json();
+          setMessages((m) =>
+            m.map((msg) => (msg.taskId === task.id ? { ...msg, status: t.status } : msg))
+          );
+          if (["completed", "failed", "cancelled", "waiting_approval"].includes(t.status) || attempts > 20) {
+            clearInterval(poll);
+            if (t.result) {
+              setMessages((m) => [
+                ...m,
+                { role: "assistant", text: JSON.stringify(t.result, null, 2) },
+              ]);
+            } else if (t.error_message) {
+              setMessages((m) => [...m, { role: "assistant", text: `Error: ${t.error_message}` }]);
+            }
+          }
+        } catch {
+          clearInterval(poll);
+        }
+      }, 1000);
     } catch (e) {
-      setTask({ id: "error", status: "failed", error_message: String(e) });
+      setMessages((m) => [...m, { role: "assistant", text: `Network error: ${e}` }]);
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
-  };
+  }
 
   return (
-    <main className="mx-auto max-w-3xl p-6">
-      <h1 className="mb-2 text-3xl font-bold">AI Employee V3.0</h1>
-      <p className="mb-6 text-gray-600">Local multi-agent AI assistant</p>
-
-      <div className="mb-4 flex gap-2">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && submit()}
-          placeholder="Nhập yêu cầu của bạn..."
-          className="flex-1 rounded border border-gray-300 px-3 py-2 focus:border-brand-500 focus:outline-none"
-        />
-        <button
-          onClick={submit}
-          disabled={loading}
-          className="rounded bg-brand-500 px-4 py-2 text-white hover:bg-brand-600 disabled:opacity-50"
-        >
-          {loading ? "Đang xử lý..." : "Gửi"}
-        </button>
-      </div>
-
-      {task && (
-        <div className="rounded border bg-white p-4 shadow-sm">
-          <div className="mb-2 flex items-center gap-2">
-            <span className="text-sm text-gray-500">Status:</span>
-            <span
-              className={`rounded px-2 py-0.5 text-xs ${
-                task.status === "completed"
-                  ? "bg-green-100 text-green-700"
-                  : task.status === "failed"
-                    ? "bg-red-100 text-red-700"
-                    : "bg-yellow-100 text-yellow-700"
+    <div className="flex h-[calc(100vh-3rem)] flex-col">
+      <h2 className="mb-3 text-xl font-semibold">Chat</h2>
+      <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto rounded border border-zinc-800 bg-zinc-900/30 p-4">
+        {messages.length === 0 && (
+          <div className="text-center text-sm text-zinc-500">
+            Gui yeu cau (tieng Viet) - AI se tu phan loai + plan + execute.
+            <br />
+            Vi du: &quot;Kiem tra don hang #12345&quot;, &quot;Viet email chao khach&quot;
+          </div>
+        )}
+        {messages.map((m, i) => (
+          <div key={i} className={`flex gap-2 ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+            {m.role === "assistant" && <Bot className="h-6 w-6 shrink-0 text-emerald-400" />}
+            <div
+              className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${
+                m.role === "user"
+                  ? "bg-emerald-600/20 text-emerald-100"
+                  : "bg-zinc-800 text-zinc-200"
               }`}
             >
-              {task.status}
-            </span>
-            {task.task_type && (
-              <span className="rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-700">
-                {task.task_type}
-              </span>
-            )}
-            {task.confidence && task.confidence.final !== undefined && (
-              <span className="rounded bg-purple-100 px-2 py-0.5 text-xs text-purple-700">
-                conf: {(task.confidence.final * 100).toFixed(0)}%
-              </span>
-            )}
+              <pre className="whitespace-pre-wrap font-sans">{m.text}</pre>
+              {m.taskId && (
+                <a
+                  href={`/tasks/${m.taskId}`}
+                  className="mt-1 inline-block text-xs text-emerald-400 hover:underline"
+                >
+                  View task #{m.taskId.slice(0, 8)} ({m.status})
+                </a>
+              )}
+            </div>
+            {m.role === "user" && <User className="h-6 w-6 shrink-0 text-zinc-500" />}
           </div>
-
-          {task.error_message && (
-            <div className="mt-2 text-red-600">Error: {task.error_message}</div>
-          )}
-
-          {task.result && (
-            <pre className="mt-3 overflow-x-auto rounded bg-gray-50 p-3 text-sm">
-              {JSON.stringify(task.result, null, 2)}
-            </pre>
-          )}
-        </div>
-      )}
-    </main>
+        ))}
+      </div>
+      <div className="mt-3 flex gap-2">
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && send()}
+          placeholder="Nhap yeu cau..."
+          className="flex-1 rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
+          disabled={busy}
+        />
+        <button
+          onClick={send}
+          disabled={busy || !input.trim()}
+          className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+        >
+          <Send className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
   );
 }
