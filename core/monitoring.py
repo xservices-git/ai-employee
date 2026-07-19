@@ -44,15 +44,21 @@ def get_metrics() -> dict[str, float]:
     with _metrics_lock:
         m = dict(_metrics)
     m["uptime_seconds"] = round(time.time() - _get_startup())
-    # query DB counts
+    # query DB counts - only for keys not already set in-memory (inc_metric takes priority)
     try:
         conn = db.get_db()
-        m["tasks_total"] = conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0]
-        m["tasks_completed"] = conn.execute("SELECT COUNT(*) FROM tasks WHERE status='completed'").fetchone()[0]
-        m["tasks_failed"] = conn.execute("SELECT COUNT(*) FROM tasks WHERE status='failed'").fetchone()[0]
-        m["tasks_pending"] = conn.execute("SELECT COUNT(*) FROM tasks WHERE status='pending'").fetchone()[0]
-        m["rules_pending"] = conn.execute("SELECT COUNT(*) FROM proposed_rules WHERE status='pending'").fetchone()[0]
-        m["rules_auto_disabled"] = conn.execute("SELECT COUNT(*) FROM proposed_rules WHERE status='auto_disabled'").fetchone()[0]
+        if "tasks_total" not in _metrics:
+            m["tasks_total"] = conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0]
+        if "tasks_completed" not in _metrics:
+            m["tasks_completed"] = conn.execute("SELECT COUNT(*) FROM tasks WHERE status='completed'").fetchone()[0]
+        if "tasks_failed" not in _metrics:
+            m["tasks_failed"] = conn.execute("SELECT COUNT(*) FROM tasks WHERE status='failed'").fetchone()[0]
+        if "tasks_pending" not in _metrics:
+            m["tasks_pending"] = conn.execute("SELECT COUNT(*) FROM tasks WHERE status='pending'").fetchone()[0]
+        if "rules_pending" not in _metrics:
+            m["rules_pending"] = conn.execute("SELECT COUNT(*) FROM proposed_rules WHERE status='pending'").fetchone()[0]
+        if "rules_auto_disabled" not in _metrics:
+            m["rules_auto_disabled"] = conn.execute("SELECT COUNT(*) FROM proposed_rules WHERE status='auto_disabled'").fetchone()[0]
     except Exception:
         pass
     return m
