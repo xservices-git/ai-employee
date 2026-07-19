@@ -30,6 +30,10 @@ tags:
     description: Eval harness
   - name: health
     description: Health + metrics
+  - name: auth
+    description: Authentication + user management
+  - name: domains
+    description: Domain configuration
 
 paths:
   /health:
@@ -58,6 +62,133 @@ paths:
           content:
             text/plain:
               schema: {type: string}
+
+  /v1/auth/register:
+    post:
+      tags: [auth]
+      summary: Register user (first user becomes admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, name, password]
+              properties:
+                email: {type: string}
+                name: {type: string}
+                password: {type: string, minLength: 8}
+                role: {type: string, enum: [admin, approver, user], default: user}
+      responses:
+        "201":
+          description: User + JWT
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: {$ref: "#/components/schemas/User"}
+                  token: {type: string}
+  /v1/auth/login:
+    post:
+      tags: [auth]
+      summary: Login with email + password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: {type: string}
+                password: {type: string}
+      responses:
+        "200":
+          description: User + JWT
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: {$ref: "#/components/schemas/User"}
+                  token: {type: string}
+  /v1/auth/me:
+    get:
+      tags: [auth]
+      summary: Current user
+      parameters:
+        - {in: header, name: Authorization, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/User"}
+  /v1/auth/users:
+    get:
+      tags: [auth]
+      summary: List users (admin only)
+      parameters:
+        - {in: header, name: Authorization, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: User list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: {type: array, items: {$ref: "#/components/schemas/User"}}
+  /v1/auth/audit:
+    get:
+      tags: [auth]
+      summary: Audit log (admin only)
+      parameters:
+        - {in: header, name: Authorization, required: true, schema: {type: string}}
+        - {in: query, name: actor, schema: {type: string}}
+        - {in: query, name: action, schema: {type: string}}
+        - {in: query, name: limit, schema: {type: integer, default: 100}}
+      responses:
+        "200":
+          description: Audit entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: {type: array, items: {$ref: "#/components/schemas/AuditEntry"}}
+  /v1/domains:
+    get:
+      tags: [domains]
+      summary: List available domains
+      responses:
+        "200":
+          description: Domain list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: {type: array, items: {type: string}}
+  /v1/domains/{domain}:
+    get:
+      tags: [domains]
+      summary: Get domain config + rules
+      parameters:
+        - {in: path, name: domain, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: Domain details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  domain: {type: string}
+                  rules: {type: array, items: {type: object}}
+                  config: {type: object}
+                  rule_count: {type: integer}
 
   /v1/tasks:
     post:
@@ -305,6 +436,26 @@ components:
           schema: {$ref: '#/components/schemas/Error'}
 
   schemas:
+    User:
+      type: object
+      properties:
+        id: {type: string}
+        email: {type: string}
+        name: {type: string}
+        role: {type: string, enum: [admin, approver, user]}
+        created_at: {type: string, format: date-time}
+    AuditEntry:
+      type: object
+      properties:
+        id: {type: integer}
+        ts: {type: string, format: date-time}
+        trace_id: {type: string}
+        actor: {type: string}
+        action: {type: string}
+        result: {type: string}
+        confidence: {type: number}
+        metadata: {type: object}
+
     Error:
       type: object
       properties:

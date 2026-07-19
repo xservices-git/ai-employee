@@ -64,6 +64,7 @@
 - [x] Monitoring (Prometheus + Grafana) [/metrics prometheus format, stdlib, no lib]
 - [x] Alerting (Telegram khi API down, error rate > 5%) [send_alert, /v1/alerts/test endpoint]
 - [x] Audit log (append-only) [audit_log table + triggers, log_action on auth/task/approval/rule]
+- [x] Domain config (YAML + API) [core/domain_config.py + /v1/domains + 3 seed YAML]
 - [ ] 3 domains production: sales, customer_support, operations [eval has 3, prod untested]
 - [x] Eval regression CI (moi PR) [scripts/eval_regression.py --baseline, exit 1 on drop]
 - [ ] Domain config UI (them domain moi qua YAML) [DEFERRED - admin v1 enough]
