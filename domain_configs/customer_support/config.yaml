@@ -1,0 +1,7 @@
+domain: customer_support
+version: 1
+rules: []
+config:
+  default_currency: VND
+  risk_threshold: low
+  auto_respond: true

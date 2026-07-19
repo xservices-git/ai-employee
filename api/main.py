@@ -17,6 +17,7 @@ from typing import Optional, Any
 from core import db, orchestrator, memory
 from core.config import SETTINGS
 from api.routes.auth import router as auth_router
+from api.routes.domains import router as domains_router
 from core import monitoring
 
 
@@ -26,6 +27,7 @@ app = FastAPI(
     description="1 orchestrator + 3 memory tang + HUMAN GATE",
 )
 app.include_router(auth_router)
+app.include_router(domains_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

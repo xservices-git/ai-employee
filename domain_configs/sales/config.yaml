@@ -1,0 +1,6 @@
+domain: sales
+version: 1
+rules: []
+config:
+  default_currency: VND
+  risk_threshold: medium

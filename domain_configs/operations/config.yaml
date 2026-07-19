@@ -1,0 +1,7 @@
+domain: operations
+version: 1
+rules: []
+config:
+  default_currency: VND
+  risk_threshold: high
+  monitoring_cron: true
