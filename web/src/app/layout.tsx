@@ -1,6 +1,7 @@
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { Nav } from "@/components/nav";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { AppShell } from "@/components/AppShell";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -13,10 +14,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="vi" className="dark">
       <body className={`${inter.className} bg-zinc-950 text-zinc-100`}>
-        <div className="flex min-h-screen">
-          <Nav />
-          <main className="flex-1 p-6">{children}</main>
-        </div>
+        <AuthProvider>
+          <AppShell>{children}</AppShell>
+        </AuthProvider>
       </body>
     </html>
   );

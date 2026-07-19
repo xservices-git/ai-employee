@@ -2,15 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { Check, X } from "lucide-react";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+import { apiGet, apiPost } from "@/lib/api";
 
 type Approval = {
   id: string;
   task_id: string;
   risk_level: string;
   reason: string;
-  proposal: any;
+  proposal: unknown;
   created_at: string;
 };
 
@@ -21,19 +20,19 @@ export default function ApprovalsPage() {
   async function load() {
     setLoading(true);
     try {
-      const r = await fetch(`${API}/v1/approvals`);
-      const d = await r.json();
-      setItems(d.items || []);
+      const d = await apiGet<Approval[]>("/v1/approvals");
+      setItems(d);
+    } catch {
+      // ignore
     } finally {
       setLoading(false);
     }
   }
 
   async function decide(id: string, decision: "approved" | "rejected") {
-    await fetch(`${API}/v1/approvals/${id}/decide`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ decision, feedback: "" }),
+    await apiPost(`/v1/approvals/${id}/decide`, {
+      decision,
+      feedback: "",
     });
     await load();
   }
@@ -53,11 +52,15 @@ export default function ApprovalsPage() {
             <div className="mb-2 flex items-center justify-between">
               <div>
                 <span className="text-sm font-medium">Approval #{a.id.slice(0, 8)}</span>
-                <span className={`ml-2 rounded px-2 py-0.5 text-xs ${
-                  a.risk_level === "high" ? "bg-red-900/50 text-red-300" :
-                  a.risk_level === "medium" ? "bg-amber-900/50 text-amber-300" :
-                  "bg-zinc-800 text-zinc-300"
-                }`}>
+                <span
+                  className={`ml-2 rounded px-2 py-0.5 text-xs ${
+                    a.risk_level === "high"
+                      ? "bg-red-900/50 text-red-300"
+                      : a.risk_level === "medium"
+                        ? "bg-amber-900/50 text-amber-300"
+                        : "bg-zinc-800 text-zinc-300"
+                  }`}
+                >
                   {a.risk_level}
                 </span>
               </div>
@@ -79,7 +82,7 @@ export default function ApprovalsPage() {
             <div className="text-xs text-zinc-500">Task: {a.task_id}</div>
             <div className="mt-1 text-sm text-zinc-400">{a.reason}</div>
             <pre className="mt-2 overflow-auto rounded bg-zinc-950 p-2 text-xs text-zinc-300">
-{JSON.stringify(a.proposal, null, 2)}
+              {JSON.stringify(a.proposal, null, 2)}
             </pre>
           </div>
         ))}

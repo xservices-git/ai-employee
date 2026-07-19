@@ -1,11 +1,23 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { apiPost, apiGet } from "@/lib/api";
 import { Send, Bot, User } from "lucide-react";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+type Msg = {
+  role: "user" | "assistant";
+  text: string;
+  taskId?: string;
+  status?: string;
+};
 
-type Msg = { role: "user" | "assistant"; text: string; taskId?: string; status?: string };
+type Task = {
+  id: string;
+  status: string;
+  input_data: { text?: string };
+  result: unknown;
+  error_message?: string;
+};
 
 export default function ChatPage() {
   const [input, setInput] = useState("");
@@ -24,27 +36,32 @@ export default function ChatPage() {
     setMessages((m) => [...m, { role: "user", text }]);
     setBusy(true);
     try {
-      const r = await fetch(`${API}/v1/tasks`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ input: text, auto_run: true }),
+      const task = await apiPost<Task>("/v1/tasks", {
+        input: text,
+        auto_run: true,
       });
-      const task = await r.json();
       setMessages((m) => [
         ...m,
-        { role: "assistant", text: `Tao task #${task.id.slice(0, 8)} (${task.status})`, taskId: task.id, status: task.status },
+        {
+          role: "assistant",
+          text: `Tao task #${task.id.slice(0, 8)} (${task.status})`,
+          taskId: task.id,
+          status: task.status,
+        },
       ]);
       // Poll status
       let attempts = 0;
       const poll = setInterval(async () => {
         attempts++;
         try {
-          const r2 = await fetch(`${API}/v1/tasks/${task.id}`);
-          const t = await r2.json();
+          const t = await apiGet<Task>(`/v1/tasks/${task.id}`);
           setMessages((m) =>
             m.map((msg) => (msg.taskId === task.id ? { ...msg, status: t.status } : msg))
           );
-          if (["completed", "failed", "cancelled", "waiting_approval"].includes(t.status) || attempts > 20) {
+          if (
+            ["completed", "failed", "cancelled", "waiting_approval"].includes(t.status) ||
+            attempts > 20
+          ) {
             clearInterval(poll);
             if (t.result) {
               setMessages((m) => [
@@ -52,7 +69,10 @@ export default function ChatPage() {
                 { role: "assistant", text: JSON.stringify(t.result, null, 2) },
               ]);
             } else if (t.error_message) {
-              setMessages((m) => [...m, { role: "assistant", text: `Error: ${t.error_message}` }]);
+              setMessages((m) => [
+                ...m,
+                { role: "assistant", text: `Error: ${t.error_message}` },
+              ]);
             }
           }
         } catch {
@@ -60,7 +80,10 @@ export default function ChatPage() {
         }
       }, 1000);
     } catch (e) {
-      setMessages((m) => [...m, { role: "assistant", text: `Network error: ${e}` }]);
+      setMessages((m) => [
+        ...m,
+        { role: "assistant", text: `Error: ${e instanceof Error ? e.message : "Network error"}` },
+      ]);
     } finally {
       setBusy(false);
     }
@@ -69,7 +92,10 @@ export default function ChatPage() {
   return (
     <div className="flex h-[calc(100vh-3rem)] flex-col">
       <h2 className="mb-3 text-xl font-semibold">Chat</h2>
-      <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto rounded border border-zinc-800 bg-zinc-900/30 p-4">
+      <div
+        ref={scrollRef}
+        className="flex-1 space-y-3 overflow-y-auto rounded border border-zinc-800 bg-zinc-900/30 p-4"
+      >
         {messages.length === 0 && (
           <div className="text-center text-sm text-zinc-500">
             Gui yeu cau (tieng Viet) - AI se tu phan loai + plan + execute.
@@ -78,8 +104,13 @@ export default function ChatPage() {
           </div>
         )}
         {messages.map((m, i) => (
-          <div key={i} className={`flex gap-2 ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-            {m.role === "assistant" && <Bot className="h-6 w-6 shrink-0 text-emerald-400" />}
+          <div
+            key={i}
+            className={`flex gap-2 ${m.role === "user" ? "justify-end" : "justify-start"}`}
+          >
+            {m.role === "assistant" && (
+              <Bot className="h-6 w-6 shrink-0 text-emerald-400" />
+            )}
             <div
               className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${
                 m.role === "user"

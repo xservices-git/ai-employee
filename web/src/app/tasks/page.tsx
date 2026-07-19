@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { RefreshCw } from "lucide-react";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+import { apiGet } from "@/lib/api";
 
 type Task = {
   id: string;
@@ -32,9 +31,10 @@ export default function TasksPage() {
   async function load() {
     setLoading(true);
     try {
-      const r = await fetch(`${API}/v1/tasks?limit=50`);
-      const data = await r.json();
+      const data = await apiGet<{ items: Task[] }>("/v1/tasks?limit=50");
       setTasks(data.items || []);
+    } catch {
+      // ignore
     } finally {
       setLoading(false);
     }
@@ -83,7 +83,7 @@ export default function TasksPage() {
                 <td className="px-3 py-2 text-zinc-400">
                   {t.confidence != null ? (t.confidence * 100).toFixed(0) + "%" : "—"}
                 </td>
-                <td className="px-3 py-2 text-zinc-300 max-w-xs truncate" title={t.input_data?.text}>
+                <td className="max-w-xs truncate px-3 py-2 text-zinc-300" title={t.input_data?.text}>
                   {t.input_data?.text?.slice(0, 50)}
                 </td>
                 <td className="px-3 py-2 text-xs text-zinc-500">

@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { Search } from "lucide-react";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+import { apiPost } from "@/lib/api";
 
 type Episode = {
   id: string;
@@ -25,13 +24,13 @@ export default function MemoryPage() {
     if (!q.trim()) return;
     setBusy(true);
     try {
-      const r = await fetch(`${API}/v1/memory/search`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: q, top_k: 10 }),
+      const d = await apiPost<{ results: Episode[] }>("/v1/memory/search", {
+        query: q,
+        top_k: 10,
       });
-      const d = await r.json();
       setResults(d.results || []);
+    } catch {
+      // ignore
     } finally {
       setBusy(false);
     }

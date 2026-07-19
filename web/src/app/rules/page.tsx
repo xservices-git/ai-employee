@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Check, X, Zap, AlertTriangle, ShieldCheck } from "lucide-react";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+import { apiGet, apiPost } from "@/lib/api";
 
 type Rule = {
   id: string;
@@ -32,14 +31,19 @@ export default function RulesPage() {
   const [items, setItems] = useState<Rule[]>([]);
   const [loading, setLoading] = useState(false);
   const [detecting, setDetecting] = useState(false);
-  const [detectResult, setDetectResult] = useState<any>(null);
+  const [detectResult, setDetectResult] = useState<{
+    patterns_found: number;
+    rules_proposed: number;
+    corrections_found: number;
+  } | null>(null);
 
   async function load() {
     setLoading(true);
     try {
-      const r = await fetch(`${API}/v1/rules?status=${filter}&limit=50`);
-      const d = await r.json();
+      const d = await apiGet<{ items: Rule[] }>(`/v1/rules?status=${filter}&limit=50`);
       setItems(d.items || []);
+    } catch {
+      // ignore
     } finally {
       setLoading(false);
     }
@@ -47,11 +51,7 @@ export default function RulesPage() {
 
   async function decide(id: string, decision: "approved" | "rejected") {
     const notes = decision === "rejected" ? "Not relevant" : "Approved";
-    await fetch(`${API}/v1/rules/${id}/decide`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ decision, review_notes: notes }),
-    });
+    await apiPost(`/v1/rules/${id}/decide`, { decision, review_notes: notes });
     await load();
   }
 
@@ -59,9 +59,14 @@ export default function RulesPage() {
     setDetecting(true);
     setDetectResult(null);
     try {
-      const r = await fetch(`${API}/v1/rules/detect?min_occurrences=2`, { method: "POST" });
-      setDetectResult(await r.json());
+      const r = await apiPost<typeof detectResult>(
+        "/v1/rules/detect?min_occurrences=2",
+        {}
+      );
+      setDetectResult(r);
       await load();
+    } catch {
+      // ignore
     } finally {
       setDetecting(false);
     }
@@ -89,7 +94,9 @@ export default function RulesPage() {
 
       {detectResult && (
         <div className="mb-3 rounded border border-emerald-800 bg-emerald-950/50 p-3 text-sm">
-          <ShieldCheck className="inline h-4 w-4" /> Detection: {detectResult.patterns_found} patterns, {detectResult.rules_proposed} rules proposed, {detectResult.corrections_found} corrections
+          <ShieldCheck className="inline h-4 w-4" /> Detection:{" "}
+          {detectResult.patterns_found} patterns, {detectResult.rules_proposed} rules
+          proposed, {detectResult.corrections_found} corrections
         </div>
       )}
 
@@ -114,7 +121,11 @@ export default function RulesPage() {
           <div key={r.id} className="rounded border border-zinc-800 bg-zinc-900/30 p-4">
             <div className="mb-2 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className={`rounded border px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[r.status] || ""}`}>
+                <span
+                  className={`rounded border px-2 py-0.5 text-xs font-medium ${
+                    STATUS_STYLE[r.status] || ""
+                  }`}
+                >
                   {r.status}
                 </span>
                 {r.domain && <span className="text-xs text-zinc-400">[{r.domain}]</span>}
@@ -140,7 +151,8 @@ export default function RulesPage() {
             <div className="text-sm text-zinc-200">{r.rule_text}</div>
             {r.condition_pattern && (
               <div className="mt-1 text-xs text-zinc-500">
-                Pattern: <code className="rounded bg-zinc-800 px-1">{r.condition_pattern}</code>
+                Pattern:{" "}
+                <code className="rounded bg-zinc-800 px-1">{r.condition_pattern}</code>
               </div>
             )}
             <div className="mt-2 flex gap-4 text-xs text-zinc-500">
@@ -148,13 +160,17 @@ export default function RulesPage() {
               <span className="text-emerald-400">success: {r.success_count}</span>
               <span className="text-red-400">fail: {r.fail_count}</span>
               {r.success_count + r.fail_count > 0 && (
-                <span>rate: {((r.success_count / (r.success_count + r.fail_count)) * 100).toFixed(0)}%</span>
+                <span>
+                  rate:{" "}
+                  {((r.success_count / (r.success_count + r.fail_count)) * 100).toFixed(0)}%
+                </span>
               )}
               {r.review_notes && <span>notes: {r.review_notes}</span>}
             </div>
             {r.status === "auto_disabled" && (
               <div className="mt-2 flex items-center gap-1 text-xs text-red-400">
-                <AlertTriangle className="h-3 w-3" /> Auto-disabled: success rate &lt; 50% over 20+ samples
+                <AlertTriangle className="h-3 w-3" /> Auto-disabled: success rate &lt; 50%
+                over 20+ samples
               </div>
             )}
           </div>
