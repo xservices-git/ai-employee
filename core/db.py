@@ -24,6 +24,8 @@ CREATE TABLE IF NOT EXISTS users (
     email TEXT UNIQUE NOT NULL,
     name TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'user',
+    password_hash TEXT,
+    api_token TEXT UNIQUE,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -136,6 +138,14 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Idempotent ALTER TABLE migrations for existing DBs."""
+    cols = {row["name"] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+    if "password_hash" not in cols:
+        conn.execute("ALTER TABLE users ADD COLUMN password_hash TEXT")
+    if "api_token" not in cols:
+        conn.execute("ALTER TABLE users ADD COLUMN api_token TEXT")
+
 def get_db() -> sqlite3.Connection:
     """Singleton connection, thread-safe init."""
     global _conn
@@ -146,10 +156,57 @@ def get_db() -> sqlite3.Connection:
                 _conn = sqlite3.connect(str(db_path), check_same_thread=False)
                 _conn.row_factory = sqlite3.Row
                 _conn.executescript(SCHEMA)
+                # migrations
+                _migrate(_conn)
                 _conn.commit()
     return _conn
 
 
+
+def create_user(email: str, name: str, password: str, role: str = "user") -> Optional[dict]:
+    """Create user with hash password. Returns user dict or None if email exists."""
+    from core.auth import hash_password
+    uid = str(uuid.uuid4())
+    pw_hash = hash_password(password)
+    try:
+        cur = get_db().execute(
+            "INSERT INTO users (id, email, name, role, password_hash) VALUES (?, ?, ?, ?, ?)",
+            (uid, email, name, role, pw_hash),
+        )
+        get_db().commit()
+        return get_user(uid)
+    except sqlite3.IntegrityError:
+        return None
+
+def get_user(user_id: str) -> Optional[dict]:
+    """Get user by ID."""
+    row = get_db().execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    if row:
+        return dict(row)
+    return None
+
+def get_user_by_email(email: str) -> Optional[dict]:
+    """Get user by email."""
+    row = get_db().execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+    if row:
+        return dict(row)
+    return None
+
+def authenticate_user(email: str, password: str) -> Optional[dict]:
+    """Verify password, return user dict or None."""
+    from core.auth import verify_password
+    user = get_user_by_email(email)
+    if user and user.get("password_hash") and verify_password(password, user["password_hash"]):
+        return user
+    return None
+
+def list_users(limit: int = 50) -> list:
+    """List all users."""
+    rows = get_db().execute(
+        "SELECT id, email, name, role, created_at FROM users ORDER BY created_at DESC LIMIT ?",
+        (limit,),
+    ).fetchall()
+    return [dict(r) for r in rows]
 def reset_db() -> None:
     """Xoa toan bo - chi dung cho test."""
     global _conn

@@ -16,6 +16,8 @@ from typing import Optional, Any
 
 from core import db, orchestrator, memory
 from core.config import SETTINGS
+from api.routes.auth import router as auth_router
+from core import monitoring
 
 
 app = FastAPI(
@@ -23,6 +25,7 @@ app = FastAPI(
     version="0.1.0",
     description="1 orchestrator + 3 memory tang + HUMAN GATE",
 )
+app.include_router(auth_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -69,6 +72,18 @@ def health():
         "version": app.version,
         "env": SETTINGS.env,
     }
+
+@app.get("/metrics")
+def metrics():
+    """Prometheus-format metrics (plain text)."""
+    from fastapi.responses import PlainTextResponse
+    return PlainTextResponse(monitoring.format_prometheus())
+
+@app.post("/v1/alerts/test")
+def test_alert(level: str = "info", message: str = "Test alert from ai-employee"):
+    """Test telegram alert (requires TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID env)."""
+    sent = monitoring.send_alert(message, level=level)
+    return {"sent": sent, "level": level, "message": message}
 
 
 @app.get("/")
