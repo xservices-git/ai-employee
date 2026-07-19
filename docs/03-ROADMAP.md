@@ -59,10 +59,11 @@
 ### Deliverables
 
 - [x] Auth (email + password, JWT) [JWT HS256 stdlib, pbkdf2_sha256]
-- [x] Multi-user (admin/approver/user roles) [role col, require_admin dep, all roles defined]
-- [x] Backup (SQLite 6h, ChromaDB daily, retention 30 ngay) [scripts/backup.py --keep 4, sqlite3 backup API]
+- [x] Multi-user (admin/approver/user roles) [role col, VALID_ROLES, require_admin, first-user auto-admin]
+- [x] Backup (SQLite 6h, ChromaDB daily, retention 30 ngay) [scripts/backup.py + cron/backup_cron.py]
 - [x] Monitoring (Prometheus + Grafana) [/metrics prometheus format, stdlib, no lib]
 - [x] Alerting (Telegram khi API down, error rate > 5%) [send_alert, /v1/alerts/test endpoint]
+- [x] Audit log (append-only) [audit_log table + triggers, log_action on auth/task/approval/rule]
 - [ ] 3 domains production: sales, customer_support, operations [eval has 3, prod untested]
 - [x] Eval regression CI (moi PR) [scripts/eval_regression.py --baseline, exit 1 on drop]
 - [ ] Domain config UI (them domain moi qua YAML) [DEFERRED - admin v1 enough]
@@ -76,6 +77,7 @@
 - [x] Backup + restore test pass [sqlite3 backup API safe, manual verify]
 - [x] 3 domains chay song song khong conflict [eval 3 domains = 50 cases pass]
 - [x] Eval pass >= 80% [M2 dat 50/50, M3 chua rerun]
+- [x] Audit log immutable [trigger blocks UPDATE/DELETE, 10 tests pass]
 
 ## KHONG co trong scope
 
