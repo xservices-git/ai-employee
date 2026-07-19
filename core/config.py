@@ -21,8 +21,10 @@ class Settings:
 
 
 def load_settings() -> Settings:
-    data = Path(os.getenv("DATA_DIR", "./data")).resolve()
-    work = Path(os.getenv("WORKSPACE_DIR", "./workspace")).resolve()
+    # Default DATA_DIR = <project_root>/data (absolute, not CWD-relative)
+    _project_root = Path(__file__).resolve().parent.parent
+    data = Path(os.getenv("DATA_DIR", str(_project_root / "data"))).resolve()
+    work = Path(os.getenv("WORKSPACE_DIR", str(_project_root / "workspace"))).resolve()
     data.mkdir(parents=True, exist_ok=True)
     work.mkdir(parents=True, exist_ok=True)
     (data / "sqlite").mkdir(parents=True, exist_ok=True)

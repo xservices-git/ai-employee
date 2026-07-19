@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bot, ListTodo, ShieldCheck, MemoryStick, BarChart3 } from "lucide-react";
+import { Bot, ListTodo, ShieldCheck, MemoryStick, BarChart3, BookCheck } from "lucide-react";
 
 const links = [
   { href: "/", label: "Chat", icon: Bot },
   { href: "/tasks", label: "Tasks", icon: ListTodo },
   { href: "/approvals", label: "Approvals", icon: ShieldCheck },
+  { href: "/rules", label: "Rules", icon: BookCheck },
   { href: "/memory", label: "Memory", icon: MemoryStick },
   { href: "/eval", label: "Eval", icon: BarChart3 },
 ];

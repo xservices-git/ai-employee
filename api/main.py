@@ -217,26 +217,62 @@ def search_memory(req: MemorySearch):
     return {"results": results, "count": len(results)}
 
 
-# ============ Rules (HUMAN GATE - stub cho M1) ============
+# ============ Rules (HUMAN GATE) ============
 
 @app.get("/v1/rules")
-def list_rules():
-    """M1: tra ve rule tu DB metadata. M2: gop voi YAML."""
-    db_conn = db.get_db()
-    rows = db_conn.execute("SELECT * FROM skill_metadata ORDER BY last_used_at DESC").fetchall()
-    items = []
-    for r in rows:
-        items.append({
-            "id": r["id"],
-            "skill_name": r["skill_name"],
-            "domain": r["domain"],
-            "success_rate": r["success_rate"],
-            "sample_size": r["sample_size"],
-            "status": r["status"],
-            "last_used_at": r["last_used_at"],
-        })
+def list_rules(status: Optional[str] = None, domain: Optional[str] = None, limit: int = 50):
+    """List proposed rules. Status: pending | approved | rejected | auto_disabled."""
+    items = db.list_proposed_rules(status=status, domain=domain, limit=limit)
     return {"items": items, "total": len(items)}
 
+@app.get("/v1/rules/{rule_id}")
+def get_rule(rule_id: str):
+    r = db.get_proposed_rule(rule_id)
+    if not r:
+        raise HTTPException(404, f"Rule not found: {rule_id}")
+    return r
+
+class RuleDecision(BaseModel):
+    decision: str = Field(..., pattern="^(approved|rejected)$")
+    review_notes: Optional[str] = None
+
+@app.post("/v1/rules/{rule_id}/decide")
+def decide_rule(rule_id: str, req: RuleDecision):
+    r = db.get_proposed_rule(rule_id)
+    if not r:
+        raise HTTPException(404, f"Rule not found: {rule_id}")
+    if r["status"] != "pending":
+        raise HTTPException(400, f"Rule already decided: {r['status']}")
+    updated = db.decide_proposed_rule(rule_id, req.decision, review_notes=req.review_notes)
+    return updated
+
+class RuleOutcome(BaseModel):
+    success: bool
+
+@app.post("/v1/rules/{rule_id}/outcome")
+def rule_outcome(rule_id: str, req: RuleOutcome):
+    """Sau khi apply rule, ghi outcome de auto-disable neu fail > 50%."""
+    r = db.get_proposed_rule(rule_id)
+    if not r:
+        raise HTTPException(404, f"Rule not found: {rule_id}")
+    db.record_rule_outcome(rule_id, req.success)
+    return db.get_proposed_rule(rule_id)
+
+@app.post("/v1/rules/detect")
+def trigger_detection(min_occurrences: int = 3, lookback_days: int = 30):
+    """Trigger pattern detection. Thuong chay bang cron weekly."""
+    from core import pattern_detector
+    result = pattern_detector.run_pattern_detection(
+        min_occurrences=min_occurrences, lookback_days=lookback_days,
+    )
+    return result
+
+# ============ Learning events ============
+
+@app.get("/v1/learning/events")
+def list_learning_events(event_type: Optional[str] = None, status: Optional[str] = None, limit: int = 50):
+    items = db.list_learning_events(event_type=event_type, status=status, limit=limit)
+    return {"items": items, "total": len(items)}
 
 # ============ Eval (stub) ============
 

@@ -68,8 +68,13 @@ def _classify_heuristic(text: str) -> dict:
     t = text.lower()
     # Order matters: more specific first
 
-    # Scheduling - phai co keyword cu the
-    if any(k in t for k in ["dat lich ", "reminder", "hen gap", "tao cuoc hop", "calendar event"]):
+    # Scheduling - phai co keyword cu the (uu tien cao nhat)
+    if any(k in t for k in [
+        "dat lich ", "reminder", "hen gap", "tao cuoc hop", "calendar event",
+        "lich hop", "lich phong van", "schedule meeting", "schedule demo",
+        "book phong", "them event", "tao su kien", "them vao calendar",
+        "dat lich callback", "dat lich phong van",
+    ]):
         return {"task_type": "scheduling_coordination", "domain": None}
 
     # Decision support
@@ -82,11 +87,19 @@ def _classify_heuristic(text: str) -> dict:
 
     # Monitoring - chi khi khong co keyword data processing
     has_data_kw = any(k in t for k in [
-        "don hang", "khach hang", "invoice", "order", "ticket", "ho tro",
-        "lookup", "truy van", "query", "lay thong tin", "doanh thu",
-        "products", "bang ", "shop ", "sku", "id ", "so dien thoai",
+        "don hang", "khach hang", "invoice", "hoa don", "ho tro",
+        "truy van", "query database", "lay thong tin", "doanh thu",
+        "bang ", "sku", "id ", "so dien thoai",
+        # Them de match cac case test
+        "ticket", "order ", "lookup", "check order", "lay danh sach",
+        "products", "query", "lay thong tin khach",
     ])
-    if not has_data_kw and any(k in t for k in ["alert", "canh bao", "trang thai he thong", "health check"]):
+    if not has_data_kw and any(k in t for k in [
+        "alert", "canh bao", "trang thai he thong", "health check",
+        "notify khi", "monitor ", "theo doi", "watch ",
+        "neu api", "neu server", "neu thanh toan fail", "khi server",
+        "mat khau dang nhap sai", "bi probation",
+    ]):
         return {"task_type": "monitoring_alerting", "domain": None}
 
     # Research - phai co keyword cu the

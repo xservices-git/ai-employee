@@ -109,6 +109,26 @@ CREATE TABLE IF NOT EXISTS skill_metadata (
     status TEXT DEFAULT 'active',
     last_used_at TEXT
 );
+
+CREATE TABLE IF NOT EXISTS proposed_rules (
+    id TEXT PRIMARY KEY,
+    rule_text TEXT NOT NULL,
+    condition_pattern TEXT,
+    action_type TEXT,
+    domain TEXT,
+    source_event_id TEXT,
+    evidence_count INTEGER DEFAULT 1,
+    success_count INTEGER DEFAULT 0,
+    fail_count INTEGER DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'pending',
+    proposed_by TEXT NOT NULL DEFAULT 'pattern_detector',
+    reviewer_id TEXT,
+    review_notes TEXT,
+    created_at TEXT NOT NULL,
+    reviewed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_rules_status ON proposed_rules(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_rules_domain ON proposed_rules(domain, status);
 """
 
 
@@ -459,3 +479,170 @@ def upsert_skill(
             (new_succ, new_fail, sample, rate, new_status, _now(), skill_name),
         )
     db.commit()
+
+# ============ Proposed rules (HUMAN GATE) ============
+
+def create_proposed_rule(
+    rule_text: str,
+    condition_pattern: Optional[str] = None,
+    action_type: Optional[str] = None,
+    domain: Optional[str] = None,
+    source_event_id: Optional[str] = None,
+    proposed_by: str = "pattern_detector",
+) -> dict:
+    rule_id = str(uuid.uuid4())
+    now = _now()
+    db = get_db()
+    db.execute(
+        """INSERT INTO proposed_rules
+           (id, rule_text, condition_pattern, action_type, domain, source_event_id,
+            evidence_count, status, proposed_by, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, 1, 'pending', ?, ?)""",
+        (rule_id, rule_text, condition_pattern, action_type, domain,
+         source_event_id, proposed_by, now),
+    )
+    db.commit()
+    return {
+        "id": rule_id,
+        "rule_text": rule_text,
+        "condition_pattern": condition_pattern,
+        "action_type": action_type,
+        "domain": domain,
+        "source_event_id": source_event_id,
+        "evidence_count": 1,
+        "status": "pending",
+        "proposed_by": proposed_by,
+        "created_at": now,
+    }
+
+def list_proposed_rules(
+    status: Optional[str] = None,
+    domain: Optional[str] = None,
+    limit: int = 50,
+) -> list[dict]:
+    db = get_db()
+    where, vals = [], []
+    if status:
+        where.append("status = ?")
+        vals.append(status)
+    if domain:
+        where.append("domain = ?")
+        vals.append(domain)
+    where_sql = ("WHERE " + " AND ".join(where)) if where else ""
+    rows = db.execute(
+        f"""SELECT * FROM proposed_rules {where_sql}
+            ORDER BY created_at DESC LIMIT ?""",
+        (*vals, limit),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+def get_proposed_rule(rule_id: str) -> Optional[dict]:
+    db = get_db()
+    row = db.execute(
+        "SELECT * FROM proposed_rules WHERE id = ?", (rule_id,),
+    ).fetchone()
+    return dict(row) if row else None
+
+def decide_proposed_rule(
+    rule_id: str,
+    decision: str,
+    reviewer_id: str = "local",
+    review_notes: Optional[str] = None,
+) -> Optional[dict]:
+    """Approve / reject rule. Decision: approved | rejected."""
+    if decision not in ("approved", "rejected"):
+        raise ValueError(f"Invalid decision: {decision}")
+    db = get_db()
+    db.execute(
+        """UPDATE proposed_rules
+           SET status = ?, reviewer_id = ?, review_notes = ?, reviewed_at = ?
+           WHERE id = ? AND status = 'pending'""",
+        (decision, reviewer_id, review_notes, _now(), rule_id),
+    )
+    db.commit()
+    return get_proposed_rule(rule_id)
+
+def record_rule_outcome(rule_id: str, success: bool) -> None:
+    """Sau khi rule duoc apply, ghi outcome de auto-disable neu fail > 50%."""
+    db = get_db()
+    row = db.execute(
+        "SELECT * FROM proposed_rules WHERE id = ?", (rule_id,),
+    ).fetchone()
+    if not row:
+        return
+    new_succ = row["success_count"] + (1 if success else 0)
+    new_fail = row["fail_count"] + (0 if success else 1)
+    sample = new_succ + new_fail
+    rate = new_succ / sample if sample else 0.0
+    new_status = row["status"]
+    if row["status"] == "approved" and sample >= 20 and rate < 0.5:
+        new_status = "auto_disabled"
+    db.execute(
+        """UPDATE proposed_rules
+           SET success_count = ?, fail_count = ?, evidence_count = ?
+           WHERE id = ?""",
+        (new_succ, new_fail, sample, rule_id),
+    )
+    if new_status != row["status"]:
+        db.execute("UPDATE proposed_rules SET status = ? WHERE id = ?", (new_status, rule_id))
+    db.commit()
+
+# ============ Learning events ============
+
+def create_learning_event(
+    event_type: str,
+    task_id: Optional[str] = None,
+    feedback_id: Optional[str] = None,
+    before_state: Optional[dict] = None,
+    after_state: Optional[dict] = None,
+    rule_extracted: Optional[str] = None,
+) -> dict:
+    ev_id = str(uuid.uuid4())
+    now = _now()
+    db = get_db()
+    db.execute(
+        """INSERT INTO learning_events
+           (id, task_id, feedback_id, event_type, before_state, after_state,
+            rule_extracted, status, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)""",
+        (ev_id, task_id, feedback_id, event_type,
+         json.dumps(before_state, ensure_ascii=False) if before_state else None,
+         json.dumps(after_state, ensure_ascii=False) if after_state else None,
+         rule_extracted, now),
+    )
+    db.commit()
+    return {"id": ev_id, "event_type": event_type, "status": "pending"}
+
+def list_learning_events(
+    event_type: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = 50,
+) -> list[dict]:
+    db = get_db()
+    where, vals = [], []
+    if event_type:
+        where.append("event_type = ?")
+        vals.append(event_type)
+    if status:
+        where.append("status = ?")
+        vals.append(status)
+    where_sql = ("WHERE " + " AND ".join(where)) if where else ""
+    rows = db.execute(
+        f"""SELECT * FROM learning_events {where_sql}
+            ORDER BY created_at DESC LIMIT ?""",
+        (*vals, limit),
+    ).fetchall()
+    out = []
+    for r in rows:
+        out.append({
+            "id": r["id"],
+            "task_id": r["task_id"],
+            "feedback_id": r["feedback_id"],
+            "event_type": r["event_type"],
+            "before_state": json.loads(r["before_state"]) if r["before_state"] else None,
+            "after_state": json.loads(r["after_state"]) if r["after_state"] else None,
+            "rule_extracted": r["rule_extracted"],
+            "status": r["status"],
+            "created_at": r["created_at"],
+        })
+    return out

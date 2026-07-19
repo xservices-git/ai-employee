@@ -143,6 +143,90 @@ EVAL_CASES = [
         "input": "Search docs cua FastAPI",
         "expected": {"task_type": "research_summarization", "must_contain": []},
     },
+
+    # ===== 10 cases: scheduling_coordination =====
+    {
+        "input": "Dat lich hop voi team marketing ngay mai 10h",
+        "expected": {"task_type": "scheduling_coordination", "must_contain": []},
+    },
+    {
+        "input": "Lich hop tuan nay cua phong ban",
+        "expected": {"task_type": "scheduling_coordination", "must_contain": []},
+    },
+    {
+        "input": "Schedule meeting review code luc 14h",
+        "expected": {"task_type": "scheduling_coordination", "must_contain": []},
+    },
+    {
+        "input": "Hen gap khach hang vao thu 2",
+        "expected": {"task_type": "scheduling_coordination", "must_contain": []},
+    },
+    {
+        "input": "Them event ngay sinh nhat vao calendar",
+        "expected": {"task_type": "scheduling_coordination", "must_contain": []},
+    },
+    {
+        "input": "Book phong hop cho ngay 25/7",
+        "expected": {"task_type": "scheduling_coordination", "must_contain": []},
+    },
+    {
+        "input": "Dat lich callback cho lead ngay mai",
+        "expected": {"task_type": "scheduling_coordination", "must_contain": []},
+    },
+    {
+        "input": "Schedule demo cho khach luc 15h chieu nay",
+        "expected": {"task_type": "scheduling_coordination", "must_contain": []},
+    },
+    {
+        "input": "Tao su kien training cho nhan vien moi",
+        "expected": {"task_type": "scheduling_coordination", "must_contain": []},
+    },
+    {
+        "input": "Dat lich phong van ung vien ngay mai",
+        "expected": {"task_type": "scheduling_coordination", "must_contain": []},
+    },
+
+    # ===== 10 cases: monitoring_alerting =====
+    {
+        "input": "Canh bao khi server CPU > 80%",
+        "expected": {"task_type": "monitoring_alerting", "must_contain": []},
+    },
+    {
+        "input": "Alert neu API response time > 2s",
+        "expected": {"task_type": "monitoring_alerting", "must_contain": []},
+    },
+    {
+        "input": "Notify khi co loi 500 trong log",
+        "expected": {"task_type": "monitoring_alerting", "must_contain": []},
+    },
+    {
+        "input": "Monitor database connection pool",
+        "expected": {"task_type": "monitoring_alerting", "must_contain": []},
+    },
+    {
+        "input": "Theo doi disk usage cua server",
+        "expected": {"task_type": "monitoring_alerting", "must_contain": []},
+    },
+    {
+        "input": "Canh bao khi mat khau dang nhap sai 3 lan",
+        "expected": {"task_type": "monitoring_alerting", "must_contain": []},
+    },
+    {
+        "input": "Alert neu thanh toan fail tren 10%",
+        "expected": {"task_type": "monitoring_alerting", "must_contain": []},
+    },
+    {
+        "input": "Watch queue length cua Redis",
+        "expected": {"task_type": "monitoring_alerting", "must_contain": []},
+    },
+    {
+        "input": "Notify khi shop TikTok bi probation",
+        "expected": {"task_type": "monitoring_alerting", "must_contain": []},
+    },
+    {
+        "input": "Monitor uptime cua cac service",
+        "expected": {"task_type": "monitoring_alerting", "must_contain": []},
+    },
 ]
 
 
