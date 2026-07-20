@@ -8,7 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import Depends, FastAPI, HTTPException, BackgroundTasks, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -16,6 +16,7 @@ from typing import Optional, Any
 
 from core import db, orchestrator, memory
 from core.config import SETTINGS
+from core.auth import decode_jwt
 from api.routes.auth import router as auth_router
 from api.routes.domains import router as domains_router
 from core import monitoring
@@ -35,6 +36,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ============ Auth helper ============
+
+def get_optional_user(authorization: Optional[str] = Header(None)) -> Optional[dict]:
+    """Extract user from Bearer token. Returns None if missing/invalid."""
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    payload = decode_jwt(authorization[7:])
+    if not payload:
+        return None
+    return db.get_user(payload["sub"])
 
 
 # ============ Schemas ============
@@ -102,16 +115,20 @@ def root():
 # ============ Tasks ============
 
 @app.post("/v1/tasks")
-def create_task(req: TaskCreate, bg: BackgroundTasks):
-    """Tao task moi. Neu auto_run=True, chay ngay trong background."""
+def create_task(req: TaskCreate, bg: BackgroundTasks, _user: Optional[dict] = Depends(get_optional_user)):
+    """Tao task moi. Neu auto_run=True, chay ngay trong background.
+
+    Auth: optional. If Bearer token present, user_id from JWT wins over body.
+    """
+    actor = _user["id"] if _user else req.user_id
     task = db.create_task(
         task_type="pending",  # se phan loai o buoc classify
         input_data={"text": req.input},
-        user_id=req.user_id,
+        user_id=actor,
         domain=req.domain,
         priority=req.priority,
     )
-    db.log_action(req.user_id, "create_task", result="ok",
+    db.log_action(actor, "create_task", result="ok",
                   trace_id=task.get("trace_id"),
                   metadata={"task_id": task["id"], "domain": req.domain})
     if req.auto_run:
@@ -201,14 +218,15 @@ def get_approval(approval_id: str):
 
 
 @app.post("/v1/approvals/{approval_id}/decide")
-def decide_approval(approval_id: str, req: ApprovalDecision):
+def decide_approval(approval_id: str, req: ApprovalDecision, _user: Optional[dict] = Depends(get_optional_user)):
     ap = db.get_approval(approval_id)
     if not ap:
         raise HTTPException(404, f"Approval not found: {approval_id}")
     if ap["decision"] != "pending":
         raise HTTPException(400, f"Approval already decided: {ap['decision']}")
     updated = db.decide_approval(approval_id, req.decision, req.feedback)
-    db.log_action("local", f"approval_{req.decision}", result="ok",
+    actor = _user["id"] if _user else "local"
+    db.log_action(actor, f"approval_{req.decision}", result="ok",
                   trace_id=ap.get("trace_id"),
                   metadata={"approval_id": approval_id, "task_id": ap["task_id"], "risk_level": ap.get("risk_level")})
     if req.decision in ("approved", "modified"):
@@ -263,14 +281,15 @@ class RuleDecision(BaseModel):
     review_notes: Optional[str] = None
 
 @app.post("/v1/rules/{rule_id}/decide")
-def decide_rule(rule_id: str, req: RuleDecision):
+def decide_rule(rule_id: str, req: RuleDecision, _user: Optional[dict] = Depends(get_optional_user)):
     r = db.get_proposed_rule(rule_id)
     if not r:
         raise HTTPException(404, f"Rule not found: {rule_id}")
     if r["status"] != "pending":
         raise HTTPException(400, f"Rule already decided: {r['status']}")
     updated = db.decide_proposed_rule(rule_id, req.decision, review_notes=req.review_notes)
-    db.log_action("local", f"rule_{req.decision}", result="ok",
+    actor = _user["id"] if _user else "local"
+    db.log_action(actor, f"rule_{req.decision}", result="ok",
                   metadata={"rule_id": rule_id, "domain": r.get("domain")})
     return updated
 

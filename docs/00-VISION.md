@@ -72,7 +72,7 @@
 |---|---|---|
 | **M1** | 1-2 thang | Foundation: FastAPI + 1 orchestrator + SQLite + ChromaDB + 3 task types |
 | **M2** | 2-3 thang | Feedback loop: 7 task types, rule propose (HUMAN), 100 eval cases |
-| **M3** | 3-4 thang | Production: multi-user, monitoring, backup, 3 domains production |
+| **M3** | 3-4 thang | Production: DONE - auth (JWT), multi-user (RBAC), audit log, monitoring (Prometheus), alerting (Telegram), backup (cron), domain config (YAML), eval regression CI, 3 seed domains ready |
 
 **Tong: 6-9 thang**, khong phai 10-12 tuan (spec cu qua ao tuong).
 

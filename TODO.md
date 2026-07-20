@@ -1,8 +1,9 @@
 # TODO - AI Employee
 
-## M3 Con lai (2/9)
+## M3 Con lai (3/9 - eval cases file, blocked production)
 
 ### BLOCKED - can user that su dung
+- [ ] Generate tests/eval_cases.py (90 cases / 3 domains x 30). Spec referenced file missing.
 - [ ] 3 domains production real-world: sales, customer_support, operations
   - eval co 3 domains, production chua co task nao
   - Can: deploy + 10+ users + 1000+ tasks
@@ -11,15 +12,21 @@
 - [ ] Uptime >= 99% (can production deploy)
 - [ ] P95 latency < 15s (can real load)
 
-### TODO ngay (tu lam duoc)
-- [ ] Restart app de route moi hoat dong (auth audit, domains)
-- [ ] Wire auth vao task endpoints (user_id tu Bearer token)
-- [ ] Wire auth vao approval + rule endpoints (optional auth)
-- [ ] Add password_hash + role cols to users table DDL in 02-DATA-MODEL.md
-- [ ] Add /v1/domains + /v1/auth/audit endpoints to specs/00-OPENAPI.yaml
-- [ ] Write domain_configs/*/rules.yaml (3 domains, rules placeholder)
-- [ ] Update VISION.md: M3 section reflects progress
-- [ ] Rerun eval baseline (M3 code co the thay doi pass rate)
+### TODO ngay (tu lam duoc) - DONE 2026-07-20
+- [x] Restart app de route moi hoat dong (auth audit, domains)
+- [x] Wire auth vao task endpoints (user_id tu Bearer token)
+- [x] Wire auth vao approval + rule endpoints (optional auth)
+- [x] Add password_hash + role cols to users table DDL in 02-DATA-MODEL.md
+- [x] Add /v1/domains + /v1/auth/audit endpoints to specs/00-OPENAPI.yaml (already in HEAD)
+- [x] Write domain_configs/*/rules.yaml (3 domains, rules placeholder)
+- [x] Update VISION.md: M3 section reflects progress
+- [ ] Rerun eval baseline - BLOCKED: tests/eval_cases.py missing (not in repo). Spec mentions 90 cases / 3 domains but file never created. Need to generate eval cases first.
+
+### Wiring verify (live test 2026-07-20)
+- POST /v1/auth/register -> user + JWT OK
+- POST /v1/tasks with Bearer -> user_id from JWT wins over body
+- POST /v1/tasks without Bearer -> user_id from body (backward compat)
+- Server PID 25960 on :8000
 
 ## DONE (2026-07-19)
 

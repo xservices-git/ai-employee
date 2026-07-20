@@ -23,9 +23,12 @@ CREATE TABLE users (
     id TEXT PRIMARY KEY,
     email TEXT UNIQUE NOT NULL,
     name TEXT NOT NULL,
+    password_hash TEXT NOT NULL,  -- pbkdf2_sha256$<salt_b64>$<hash_b64> (core/auth.py)
     role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'approver', 'user')),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_login_at TIMESTAMP
 );
+CREATE INDEX idx_users_email ON users(email);
 
 -- tasks (TAM CHINH)
 CREATE TABLE tasks (

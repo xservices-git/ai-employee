@@ -1,0 +1,7 @@
+# Rules placeholder - sales domain
+# Hien tai chua co rule nao duoc propose.
+# Rule se duoc tu dong propose qua /v1/rules/detect
+# Khi co rules: format giong vi du trong 02-DATA-MODEL.md
+domain: sales
+version: 1
+rules: []
